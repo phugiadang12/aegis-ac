@@ -88,8 +88,20 @@ class Kill(_Event):
     headshot: bool = False
 
 
+class Honeypot(_Event):
+    """A phantom entity the anti-cheat server places in the world but never
+    sends to real clients. Only the trusted server (and so the collector) knows
+    it exists, so any player who aims at or shoots it is reading game state they
+    should have no access to — a near-certain wallhack/ESP tell. ``hid`` is the
+    phantom's id; ``pos`` is where the server put it this tick."""
+
+    type: Literal["honeypot"]
+    hid: int = Field(ge=0, le=255)
+    pos: Vec3
+
+
 Event = Annotated[
-    Union[PlayerJoin, PlayerLeave, Spawn, Tick, Shot, Damage, Kill],
+    Union[PlayerJoin, PlayerLeave, Spawn, Tick, Shot, Damage, Kill, Honeypot],
     Field(discriminator="type"),
 ]
 

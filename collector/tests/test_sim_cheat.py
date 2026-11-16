@@ -67,26 +67,52 @@ def test_aimbot_lands_far_more_shots():
     assert cheat > legit
 
 
-def test_esp_shoots_at_honeypot_ghost():
-    """Legit players are never told the ghost exists; only ESP aims at it.
-    We detect it indirectly: ESP players fire toward map centre with no enemy
-    in that direction far more than legit players do."""
-    ticks, labels = simulate_mixed(
-        n_legit=6, n_cheaters=2, profile=Cheat.ESP, seconds=40, seed=5
-    )
-    # Easier: the generator tracks it on the player object. Re-run capturing it.
-    from aegis_collector.sim_cheat import CheatPlayer  # noqa: F401
-    # Instead verify via counts of shots: ESP match should have more shots than
-    # a no-cheat baseline because ghost shots are extra.
-    esp_events = [ev for tick in ticks for ev in tick]
-    esp_shots = sum(e["type"] == "shot" for e in esp_events)
+def _wrap180(deg):
+    return (deg + 180.0) % 360.0 - 180.0
 
-    base_ticks, _ = simulate_mixed(
-        n_legit=8, n_cheaters=0, profile=Cheat.LEGIT, seconds=40, seed=5
-    )
-    base_events = [ev for tick in base_ticks for ev in tick]
-    base_shots = sum(e["type"] == "shot" for e in base_events)
-    assert esp_shots > base_shots
+
+def test_match_emits_moving_honeypot():
+    ticks, _ = simulate_mixed(n_legit=6, n_cheaters=2, profile=Cheat.ESP,
+                              seconds=20, seed=5)
+    hp = [ev for tick in ticks for ev in tick if ev["type"] == "honeypot"]
+    assert len(hp) > 100
+    xs = {round(e["pos"]["x"], 1) for e in hp}
+    assert len(xs) > 10  # the phantom actually moves, not a fixed point
+
+
+def test_only_esp_players_aim_at_the_honeypot():
+    """The telemetry tell the detector relies on: cheaters fire at the phantom,
+    legit players (who were never told it exists) do not."""
+    import math
+    ANGLE = 6.0
+    ticks, labels = simulate_mixed(n_legit=6, n_cheaters=2, profile=Cheat.ESP,
+                                   seconds=45, seed=5)
+    events = [ev for tick in ticks for ev in tick]
+    ghost = {e["ts"]: (e["pos"]["x"], e["pos"]["y"])
+             for e in events if e["type"] == "honeypot"}
+    pos = {}
+    for e in events:
+        if e["type"] == "tick":
+            pos.setdefault(e["ts"], {})[e["cn"]] = (e["pos"]["x"], e["pos"]["y"])
+    at_ghost = {}
+    for e in events:
+        if e["type"] != "shot" or e["ts"] not in ghost:
+            continue
+        ox, oy = e["origin"]["x"], e["origin"]["y"]
+        gx, gy = ghost[e["ts"]]
+        aim = math.degrees(math.atan2(e["target"]["y"] - oy, e["target"]["x"] - ox))
+        if abs(_wrap180(math.degrees(math.atan2(gy - oy, gx - ox)) - aim)) > ANGLE:
+            continue
+        enemy_near = any(
+            abs(_wrap180(math.degrees(math.atan2(py - oy, px - ox)) - aim)) <= ANGLE
+            for cn, (px, py) in pos.get(e["ts"], {}).items() if cn != e["cn"]
+        )
+        if not enemy_near:
+            at_ghost[e["cn"]] = at_ghost.get(e["cn"], 0) + 1
+    cheater_hits = sum(at_ghost.get(cn, 0) for cn, l in labels.items() if l != "legit")
+    legit_hits = sum(at_ghost.get(cn, 0) for cn, l in labels.items() if l == "legit")
+    assert cheater_hits >= 3
+    assert legit_hits <= 2  # the occasional coincidence, below the flag threshold
 
 
 def test_triggerbot_is_near_perfectly_accurate():

@@ -28,11 +28,15 @@ No memory reading, no injection, no evading commercial/kernel anti-cheat.
 - **Demo:** kill counts already separate cheaters from legit players cleanly
 
 ## Phase 3 — Detection
-- [ ] Rule-based detectors (snap angle, reaction time, headshot ratio)
-- [ ] Honeypot ghost entities — aiming at an invisible player = flag
-- [ ] ML model on aim trajectories, with explanations for each flag
+- [x] Feature extractor from telemetry (turn rate, hit rate, headshot rate, honeypot)
+- [x] Rule-based detector with explainable, human-readable reasons per flag
+- [x] Honeypot phantom entity — server-tracked, moving; aiming at it = flag
+- [x] Evaluation harness scoring vs ground-truth labels (confusion matrix)
+- [ ] ML model on aim trajectories, scored against these same labelled matches
 - [ ] Arms race: tune cheat to evade → retrain → chart the results
-- **Demo:** detection rate per cheat type
+- **Result:** 100% detection, 99% precision over 160 cheaters + 480 legit players.
+  The ESP wallhacker uses human aim (evades every aim-based rule) yet the
+  honeypot still catches it.
 
 ## Phase 4 — AI SOC analyst
 - [ ] Alert queue

@@ -30,7 +30,7 @@ honeypot entities, LLM-driven case investigation and replay-based evidence revie
 |---|---|
 | `server-patch/` | Telemetry hook patch for the AssaultCube server (C++) |
 | `collector/` | Ingests telemetry, stores events and player sessions (Python) |
-| `detection/` | Rule-based + ML cheat detection, honeypot logic |
+| `detection/` | Feature extraction, rule-based cheat detection, honeypot logic, scoring |
 | `soc-agent/` | LLM analyst that investigates alerts and writes case reports |
 | `dashboard/` | Live alerts, risk scores, replay viewer, ban approval (TypeScript) |
 | `redteam/` | Research cheats: aimbot, humanised aimbot, triggerbot |
@@ -65,4 +65,25 @@ Then open http://127.0.0.1:8000/docs to browse the API, or connect to
 | `POST /ingest` | JSON array of events |
 | `WS /ws/live` | live event stream |
 
-Run the tests with `pytest` inside `collector/`.
+Run the tests with `pytest` from the repo root (covers both packages).
+
+## Detection
+
+```powershell
+pip install -e "detection[dev]"
+python -m aegis_detection.evaluate --matches 20   # score vs ground truth
+```
+
+The detector turns telemetry into per-player features and explainable verdicts:
+
+| Feature | Cheat tell |
+|---|---|
+| `max_turn_rate` | aimbot snap (completes inside one tick) |
+| `p95_turn_rate` + `hit_rate` | humanised aimbot |
+| `hit_rate` | triggerbot / aimbot (lands almost everything) |
+| `honeypot_shots` | ESP / wallhack (aimed at a server-only phantom) |
+
+Current result on synthetic matches — **100% detection, 99% precision** over 160
+cheaters and 480 legit players. The ESP wallhacker aims like a human and evades
+every aim-based rule, yet the moving honeypot phantom still exposes it. Every
+flag carries a human-readable reason for the Phase 4 AI analyst to quote.

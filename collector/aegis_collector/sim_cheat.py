@@ -64,6 +64,7 @@ class CheatPlayer:
     # humanised-aimbot snap state
     _snap_remaining: int = 0
     _snap_target_yaw: float = 0.0
+    _baiting: bool = False  # ESP: committed to turning onto the phantom
     # metrics a detector could never see but we use for sanity checks
     shots_at_ghost: int = field(default=0)
     los_violations: int = field(default=0)
@@ -90,12 +91,11 @@ class CheatPlayer:
         if p.target is not None and not p.target.alive:
             p.target = None
 
-        # ESP occasionally locks onto a honeypot ghost that legit players can
-        # never perceive — a near-certain tell.
-        if self.cheat is Cheat.ESP and ghost_pos is not None and self.rng.random() < 0.05:
-            self._aim_instant(_bearing(p.pos, ghost_pos))
-            self._fire(t, emit)
-            self.shots_at_ghost += 1
+        # ESP / wallhack: aim is fully HUMAN (so aim-rate and accuracy rules can't
+        # catch it), but the player knows enemy positions through walls and is
+        # occasionally lured into aiming at the honeypot phantom — the one tell.
+        if self.cheat is Cheat.ESP:
+            self._esp_tick(t, dt, ghost_pos, emit)
             return
 
         if p.target is None:
@@ -146,8 +146,45 @@ class CheatPlayer:
                 hit = p.target if self.rng.random() < 0.85 else None
                 self._fire(t, emit, hit_target=hit)
 
-        if self.cheat is Cheat.ESP and not visible and p.target is not None:
-            self.los_violations += 1
+    def _esp_tick(self, t: float, dt: float, ghost_pos, emit) -> None:
+        p = self.inner
+        # the phantom lures the wallhacker: once tempted they commit to turning
+        # onto it over a few ticks and fire — aiming at something only a cheat
+        # could know is there. Sticky, so the shot actually lands.
+        if not self._baiting and ghost_pos is not None and self.rng.random() < 0.02:
+            self._baiting = True
+        if self._baiting:
+            if ghost_pos is None:
+                self._baiting = False
+            else:
+                gdir = _bearing(p.pos, ghost_pos)
+                p.engaged_for = 1.0  # full turn speed onto the bait
+                self._turn_human(gdir, dt)
+                if abs(_wrap180(gdir - p.yaw)) < 6.0 and t - p.last_shot >= FIRE_INTERVAL:
+                    self._fire(t, emit)  # shot at the phantom — the tell
+                    self.shots_at_ghost += 1
+                    self._baiting = False
+                return
+        # normal combat, but tracking the target THROUGH walls (no LoS gate)
+        if p.target is None:
+            return
+        tgt = p.target
+        desired = _bearing(p.pos, tgt.pos)
+        p.engaged_for += dt
+        self._turn_human(desired, dt)
+        if abs(_wrap180(desired - p.yaw)) < 6.0 and t - p.last_shot >= FIRE_INTERVAL:
+            # slightly better than human because they never get surprised
+            hit = tgt if self.rng.random() < min(0.9, p.accuracy + 0.25) else None
+            if not _has_los(self.rng, p.pos, tgt.pos):
+                self.los_violations += 1
+            self._fire(t, emit, hit_target=hit)
+
+    def _turn_human(self, desired: float, dt: float) -> None:
+        p = self.inner
+        speed = p.turn_speed if p.engaged_for > p.reaction else 60.0
+        diff = _wrap180(desired - p.yaw)
+        turn = max(-speed * dt, min(speed * dt, diff))
+        p.yaw = (p.yaw + turn + self.rng.gauss(0, p.aim_noise)) % 360.0
 
     def _aim_instant(self, yaw: float) -> None:
         self.inner.yaw = yaw % 360.0
@@ -203,8 +240,16 @@ def simulate_mixed(
         players.append(CheatPlayer(inner, cheat, rng))
         labels[cn] = cheat.value
 
-    # a honeypot "ghost": a position no real client is told about
-    ghost_pos = [MAP_SIZE / 2, MAP_SIZE / 2, 0.0] if with_ghost else None
+    def ghost_at(t: float) -> list[float] | None:
+        # the phantom drifts slowly, so detecting it means tracking a moving
+        # position per tick — not just "aimed at map centre"
+        if not with_ghost:
+            return None
+        return [
+            MAP_SIZE / 2 + 40 * math.sin(t * 0.3),
+            MAP_SIZE / 2 + 40 * math.cos(t * 0.21),
+            0.0,
+        ]
 
     def gen() -> Iterator[list[dict[str, Any]]]:
         def base(t: float, kind: str) -> dict[str, Any]:
@@ -223,6 +268,10 @@ def simulate_mixed(
 
             def emit(kind: str, **fields):
                 out.append({**base(t, kind), **fields})
+
+            ghost_pos = ghost_at(t)
+            if ghost_pos is not None:
+                emit("honeypot", hid=0, pos=_vec(ghost_pos))
 
             for cp in players:
                 p = cp.inner
