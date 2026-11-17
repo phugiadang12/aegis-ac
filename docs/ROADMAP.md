@@ -50,7 +50,12 @@ No memory reading, no injection, no evading commercial/kernel anti-cheat.
 - **Demo:** `python -m aegis_soc --profile esp` → a reviewed case card per alert
 
 ## Phase 5 — Dashboard & enforcement
-- [ ] Live alerts and player risk scores
-- [ ] 2D replay viewer: suspect's crosshair path vs. normal players
-- [ ] Delayed ban waves → kick from the AssaultCube server
-- **Demo:** the 2-minute end-to-end video for the README
+- [x] Analysis API (FastAPI) composing detection + SOC + replay + ban waves
+- [x] TypeScript + React dashboard: live alert queue with player risk scores
+- [x] Case panel — the SOC analyst's report per alert, with evidence
+- [x] 2D replay viewer (canvas): suspect's crosshair path vs. normal players,
+      with the honeypot phantom drawn in
+- [x] Delayed ban waves — queue confirmed cheaters, release together; pluggable
+      kick executor (logs now, ready to wire to the AssaultCube server)
+- [ ] Record the 2-minute end-to-end demo video for the README
+- **Demo:** `uvicorn aegis_soc.api:create_app --factory --port 8008` + `npm run dev`

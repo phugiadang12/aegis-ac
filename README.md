@@ -115,3 +115,30 @@ Evidence:
   - 8 shots at the phantom with no real enemy on the aim line
 Recommendation: Approve a ban: the evidence is conclusive.
 ```
+
+## Dashboard
+
+A TypeScript + React SOC dashboard (`dashboard/`) backed by an analysis API
+(`aegis_soc.api`) that composes detection, the SOC analyst, replay data and the
+ban-wave queue. It seeds itself with simulated matches, so it runs with no game
+server wired up yet.
+
+```powershell
+# terminal 1 — analysis API (seeds demo matches)
+uvicorn aegis_soc.api:create_app --factory --port 8008
+
+# terminal 2 — dashboard (proxies /api to :8008)
+cd dashboard
+npm install
+npm run dev            # http://localhost:5173
+```
+
+- **Alert queue** with per-player risk scores and priority.
+- **Case panel** — the analyst's report for the selected alert: category,
+  confidence, evidence, recommendation.
+- **2D replay viewer** (canvas) — the suspect's crosshair path in red against the
+  other players, with the moving honeypot phantom drawn in, so a wallhacker's
+  aim at an invisible target is visible at a glance.
+- **Delayed ban waves** — queue confirmed cheaters and release them together, so
+  cheat authors can't correlate a ban to the match that exposed them. The kick
+  is a pluggable executor (logs now, ready to wire to the AssaultCube server).
