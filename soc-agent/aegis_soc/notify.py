@@ -30,11 +30,17 @@ _DISPO_COLOR = {
 Sender = Callable[[str, dict], None]
 
 
+# Discord (and its Cloudflare front) rejects requests with no real User-Agent,
+# so send a generic client identifier — never anything that identifies the user.
+_USER_AGENT = "AegisAC/0.1 (+anti-cheat SOC notifier)"
+
+
 def _http_post(url: str, payload: dict, timeout: float = 5.0) -> None:
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
-        url, data=data, headers={"Content-Type": "application/json"}, method="POST")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (fixed scheme below)
+        url, data=data, method="POST",
+        headers={"Content-Type": "application/json", "User-Agent": _USER_AGENT})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (https enforced by channel)
         resp.read()
 
 

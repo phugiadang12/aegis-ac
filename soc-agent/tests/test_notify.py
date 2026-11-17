@@ -92,3 +92,26 @@ def test_from_env_is_empty_without_config(monkeypatch):
     monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
     monkeypatch.delenv("AEGIS_NOTIFY_CONSOLE", raising=False)
     assert Notifier.from_env().configured == []
+
+
+def test_http_post_sends_a_user_agent(monkeypatch):
+    """Discord/Cloudflare 403s requests with no real User-Agent, so the raw
+    sender must set one (and it must not leak anything user-identifying)."""
+    import aegis_soc.notify as notify
+
+    captured = {}
+
+    class FakeResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b""
+
+    def fake_urlopen(req, timeout=None):
+        captured["ua"] = req.get_header("User-agent")
+        captured["ct"] = req.get_header("Content-type")
+        return FakeResp()
+
+    monkeypatch.setattr(notify.urllib.request, "urlopen", fake_urlopen)
+    notify._http_post("https://discord.com/api/webhooks/1/x", {"content": "hi"})
+    assert captured["ua"] and "AegisAC" in captured["ua"]
+    assert captured["ct"] == "application/json"
