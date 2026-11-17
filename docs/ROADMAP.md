@@ -57,5 +57,7 @@ No memory reading, no injection, no evading commercial/kernel anti-cheat.
       with the honeypot phantom drawn in
 - [x] Delayed ban waves — queue confirmed cheaters, release together; pluggable
       kick executor (logs now, ready to wire to the AssaultCube server)
+- [x] Push confirmed cases to Discord (incoming webhook); pluggable channel
+      interface ready for Zalo / Slack / Grafana
 - [ ] Record the 2-minute end-to-end demo video for the README
 - **Demo:** `uvicorn aegis_soc.api:create_app --factory --port 8008` + `npm run dev`

@@ -8,6 +8,7 @@ set ANTHROPIC_API_KEY to let a Claude agent drive the investigation.
 from .analyst import HeuristicAnalyst, LLMAnalyst, build_analyst
 from .enforcement import BanRecord, BanWave, LoggingKickExecutor
 from .evidence import Investigation, MatchContext
+from .notify import DiscordWebhook, Notification, Notifier
 from .report import TAXONOMY, CaseReport
 from .triage import Alert, AlertQueue, triage_match
 
@@ -17,4 +18,5 @@ __all__ = [
     "CaseReport", "TAXONOMY",
     "Alert", "AlertQueue", "triage_match",
     "BanWave", "BanRecord", "LoggingKickExecutor",
+    "Notifier", "DiscordWebhook", "Notification",
 ]

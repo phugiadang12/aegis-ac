@@ -24,6 +24,7 @@ from aegis_collector.sim_cheat import Cheat, simulate_mixed
 from .analyst import Analyst, HeuristicAnalyst, build_analyst
 from .enforcement import BanWave
 from .evidence import MatchContext
+from .notify import Notifier
 from .report import CaseReport
 from .triage import AlertQueue
 
@@ -49,10 +50,13 @@ class MatchData:
 
 class AnalysisService:
     def __init__(self, analyst: Analyst | None = None,
-                 ban_delay_seconds: float = 3600.0) -> None:
+                 ban_delay_seconds: float = 3600.0,
+                 notifier: Notifier | None = None) -> None:
         self.analyst: Analyst = analyst or HeuristicAnalyst()
         self.matches: dict[str, MatchData] = {}
         self.banwave = BanWave(delay_seconds=ban_delay_seconds)
+        self.notifier = notifier or Notifier()
+        self.notifications: list[dict[str, Any]] = []
 
     def seed(self) -> None:
         for match_id, profile, n_cheat, seed in SEED_MATCHES:
@@ -149,11 +153,35 @@ class AnalysisService:
             raise HTTPException(400, "player was cleared; nothing to enqueue")
         self.banwave.enqueue(match_id, cn, report.name,
                              report.category, report.confidence)
+        self._dispatch(report, match_id)
         return self.banwave.snapshot()
 
+    def _dispatch(self, report: CaseReport, match_id: str) -> list[dict[str, Any]]:
+        """Fan a case out to the configured chat channels (Discord, …)."""
+        results = [r.__dict__ for r in self.notifier.notify(report, match_id)]
+        if results:
+            self.notifications.append(
+                {"match_id": match_id, "cn": report.cn, "results": results})
+        return results
 
-def create_app(seed: bool = True, analyst: Analyst | None = None) -> FastAPI:
-    service = AnalysisService(analyst=analyst or build_analyst())
+    def notify_test(self) -> dict[str, Any]:
+        """Send the highest-suspicion case to every channel, to prove wiring."""
+        if not self.notifier.channels:
+            raise HTTPException(400, "no notification channels configured "
+                                     "(set DISCORD_WEBHOOK_URL)")
+        alerts = self.alerts()
+        if not alerts:
+            raise HTTPException(400, "no alerts to send")
+        top = alerts[0]
+        report = self.case(top["match_id"], top["cn"])
+        return {"sent_to": self.notifier.configured,
+                "results": self._dispatch(report, top["match_id"])}
+
+
+def create_app(seed: bool = True, analyst: Analyst | None = None,
+               notifier: Notifier | None = None) -> FastAPI:
+    service = AnalysisService(analyst=analyst or build_analyst(),
+                              notifier=notifier or Notifier.from_env())
     if seed:
         service.seed()
 
@@ -199,5 +227,14 @@ def create_app(seed: bool = True, analyst: Analyst | None = None) -> FastAPI:
         released = service.banwave.release(force=True)
         return {"released": [r.as_dict() for r in released],
                 **service.banwave.snapshot()}
+
+    @app.get("/api/notify/status")
+    def notify_status():
+        return {"channels": service.notifier.configured,
+                "sent": len(service.notifications)}
+
+    @app.post("/api/notify/test")
+    def notify_test():
+        return service.notify_test()
 
     return app

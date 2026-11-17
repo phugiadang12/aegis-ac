@@ -142,3 +142,22 @@ npm run dev            # http://localhost:5173
 - **Delayed ban waves** — queue confirmed cheaters and release them together, so
   cheat authors can't correlate a ban to the match that exposed them. The kick
   is a pluggable executor (logs now, ready to wire to the AssaultCube server).
+
+## Alerts to Discord
+
+The SOC analyst can push a case out to chat the moment a cheater is confirmed,
+so the team doesn't have to watch the dashboard. Discord is wired up (incoming
+webhook); the channel interface is pluggable, so Zalo, Slack or a Grafana
+contact point can slot in later.
+
+```powershell
+$env:DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/…"   # your channel webhook
+uvicorn aegis_soc.api:create_app --factory --port 8008
+# then prove the wiring end to end:
+#   POST http://127.0.0.1:8008/api/notify/test
+```
+
+Queuing a confirmed cheater for a ban wave (in the dashboard or via the API)
+posts a rich embed — player, category, confidence, evidence and the
+recommendation. A failing webhook never breaks the request that triggered it,
+and the URL is read from the environment and never logged.

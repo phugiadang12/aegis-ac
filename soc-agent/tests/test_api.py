@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from aegis_soc.analyst import HeuristicAnalyst
 from aegis_soc.api import create_app
+from aegis_soc.notify import DiscordWebhook, Notifier
 
 
 @pytest.fixture
@@ -12,6 +13,18 @@ def client():
     app = create_app(analyst=HeuristicAnalyst())  # deterministic, no API key
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def notified():
+    """Client whose notifier posts to a captured Discord webhook."""
+    calls: list = []
+    notifier = Notifier([DiscordWebhook(
+        "https://discord.com/api/webhooks/1/x",
+        sender=lambda url, payload: calls.append((url, payload)))])
+    app = create_app(analyst=HeuristicAnalyst(), notifier=notifier)
+    with TestClient(app) as c:
+        yield c, calls
 
 
 def test_health_reports_seeded_matches(client):
@@ -75,3 +88,25 @@ def test_ban_wave_queue_and_release_flow(client):
 
 def test_unknown_match_is_404(client):
     assert client.get("/api/matches/nope/replay").status_code == 404
+
+
+def test_queueing_a_ban_pushes_a_discord_alert(notified):
+    client, calls = notified
+    alert = client.get("/api/alerts").json()[0]
+    client.post(f"/api/banwave/queue/{alert['match_id']}/{alert['cn']}")
+    assert len(calls) == 1
+    _, payload = calls[0]
+    assert payload["embeds"][0]["fields"], "a Discord embed should have been posted"
+    status = client.get("/api/notify/status").json()
+    assert status["channels"] == ["discord"] and status["sent"] == 1
+
+
+def test_notify_test_endpoint_sends_top_case(notified):
+    client, calls = notified
+    body = client.post("/api/notify/test").json()
+    assert body["sent_to"] == ["discord"]
+    assert len(calls) == 1
+
+
+def test_notify_test_without_channels_is_400(client):
+    assert client.post("/api/notify/test").status_code == 400
