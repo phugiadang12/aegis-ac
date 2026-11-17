@@ -39,11 +39,15 @@ No memory reading, no injection, no evading commercial/kernel anti-cheat.
   honeypot still catches it.
 
 ## Phase 4 — AI SOC analyst
-- [ ] Alert queue
-- [ ] LLM agent with tools: player history, baseline comparison, replay fetch
-- [ ] Cheat taxonomy (aim assist, wallhack, speed, triggerbot)
-- [ ] Case report with confidence + recommendation, human approves
-- **Demo:** alert → AI case report in seconds
+- [x] Alert queue (flagged players, highest suspicion first)
+- [x] Investigation tools: overview, baseline (z-score vs clean cohort), turn
+      timeline, honeypot evidence, lobby roster
+- [x] LLM agent that calls those tools and files a structured case report
+      (Claude via the Anthropic SDK), with a deterministic offline backend so
+      the pipeline runs with no API key
+- [x] Cheat taxonomy (aimbot, humanised aimbot, triggerbot, ESP, aim assist)
+- [x] Case report with confidence + recommendation + disposition, human approves
+- **Demo:** `python -m aegis_soc --profile esp` → a reviewed case card per alert
 
 ## Phase 5 — Dashboard & enforcement
 - [ ] Live alerts and player risk scores

@@ -86,4 +86,32 @@ The detector turns telemetry into per-player features and explainable verdicts:
 Current result on synthetic matches — **100% detection, 99% precision** over 160
 cheaters and 480 legit players. The ESP wallhacker aims like a human and evades
 every aim-based rule, yet the moving honeypot phantom still exposes it. Every
-flag carries a human-readable reason for the Phase 4 AI analyst to quote.
+flag carries a human-readable reason for the AI analyst to quote.
+
+## AI SOC analyst
+
+```powershell
+pip install -e "soc-agent"            # add [llm] for the Claude-driven agent
+python -m aegis_soc --profile esp     # investigate a match's alerts
+```
+
+Each detector flag opens an alert. The analyst investigates it with the same
+tools a human would — a stats overview, a z-score against the match's unflagged
+players, the sharpest view snaps, and the honeypot evidence — then files a case
+report with a confidence, a disposition (ban / shadow / monitor / clear) and the
+reasoning, for a human to approve. Nothing is auto-banned.
+
+Set `ANTHROPIC_API_KEY` and a Claude agent drives the investigation (it chooses
+which tools to call via the Anthropic SDK, then emits the report as a validated
+structured output). Without a key it runs a deterministic backend that produces
+the same report shape, so the whole pipeline is reproducible offline.
+
+```
+CASE: esp - p07
+Player      : p07 (cn 7)      Category: esp      Confidence: 95%      BAN
+Evidence:
+  - aimed at the phantom entity 8 times - only a wallhack can see it
+  - shots at phantom entity is 16.3 standard deviations above the clean cohort
+  - 8 shots at the phantom with no real enemy on the aim line
+Recommendation: Approve a ban: the evidence is conclusive.
+```

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aegis-soc"
+version = "0.1.0"
+description = "AI SOC analyst that investigates cheat alerts and writes case reports"
+requires-python = ">=3.12"
+dependencies = ["aegis-collector", "aegis-detection", "pydantic>=2"]
+
+[project.optional-dependencies]
+# The analyst runs fully offline with the deterministic backend; installing the
+# Anthropic SDK unlocks the LLM-driven investigation.
+llm = ["anthropic>=0.69"]
+dev = ["pytest>=8"]
+
+[tool.setuptools]
+packages = ["aegis_soc"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
