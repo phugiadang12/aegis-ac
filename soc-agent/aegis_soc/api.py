@@ -57,6 +57,7 @@ class AnalysisService:
         self.banwave = BanWave(delay_seconds=ban_delay_seconds)
         self.notifier = notifier or Notifier()
         self.notifications: list[dict[str, Any]] = []
+        self._live_counter = 0
 
     def seed(self) -> None:
         for match_id, profile, n_cheat, seed in SEED_MATCHES:
@@ -164,6 +165,54 @@ class AnalysisService:
                 {"match_id": match_id, "cn": report.cn, "results": results})
         return results
 
+    def inject(self, profile: str, escalate: bool = False) -> dict[str, Any]:
+        """Live red team: spin up a fresh match with one synthetic cheater of
+        the given profile and add it to the board, so a new alert appears on
+        demand during a demo. This streams the cheat's telemetry *signature* —
+        it never runs a real cheat. With ``escalate`` the cheater is queued
+        straight away, which fires the chat notification (Discord)."""
+        try:
+            cheat = Cheat(profile)
+        except ValueError:
+            raise HTTPException(400, f"unknown profile '{profile}'")
+        if cheat is Cheat.LEGIT:
+            raise HTTPException(400, "profile must be a cheat, not 'legit'")
+
+        self._live_counter += 1
+        n_legit = 5
+        cheater_cn = n_legit  # cns 0..n_legit-1 are legit, the cheater is next
+        match_id = f"live-{cheat.value}-{self._live_counter}"
+
+        # Pick a seed where only the injected cheater is flagged, so the demo
+        # shows exactly one clean catch and never a coincidental false positive.
+        chosen = None
+        base = 9000 + self._live_counter * 50
+        for seed in range(base, base + 25):
+            ticks, labels = simulate_mixed(
+                n_legit=n_legit, n_cheaters=1, profile=cheat, seconds=45, seed=seed)
+            events = [ev for tick in ticks for ev in tick]
+            ctx = MatchContext.from_events(events, match_id=match_id)
+            flagged = {cn for cn, v in ctx.verdicts.items() if v.is_cheat}
+            chosen = (events, ctx, labels)
+            if flagged == {cheater_cn}:
+                break
+
+        events, ctx, labels = chosen
+        self.matches[match_id] = MatchData(
+            match_id=match_id, profile=cheat.value, events=events, ctx=ctx, labels=labels)
+
+        q = AlertQueue()
+        q.ingest(ctx)
+        alerts = [{"match_id": match_id, "cn": a.cn, "name": a.name,
+                   "suspicion": round(a.suspicion, 3), "category": a.category,
+                   "priority": a.priority} for a in q]
+        if escalate:
+            for a in q:
+                self.queue_ban(match_id, a.cn)  # fires the chat notification
+        return {"match_id": match_id, "profile": cheat.value,
+                "alerts": alerts, "escalated": escalate,
+                "notified": self.notifier.configured if escalate else []}
+
     def notify_test(self) -> dict[str, Any]:
         """Send the highest-suspicion case to every channel, to prove wiring."""
         if not self.notifier.channels:
@@ -227,6 +276,10 @@ def create_app(seed: bool = True, analyst: Analyst | None = None,
         released = service.banwave.release(force=True)
         return {"released": [r.as_dict() for r in released],
                 **service.banwave.snapshot()}
+
+    @app.post("/api/redteam/inject")
+    def inject(profile: str = "aimbot", escalate: bool = False):
+        return service.inject(profile=profile, escalate=escalate)
 
     @app.get("/api/notify/status")
     def notify_status():

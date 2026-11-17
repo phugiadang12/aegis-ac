@@ -100,4 +100,7 @@ export const api = {
   queueBan: (matchId: string, cn: number) =>
     post<BanSnapshot>(`/api/banwave/queue/${matchId}/${cn}`),
   releaseWave: () => post<BanSnapshot & { released: BanRecord[] }>("/api/banwave/release"),
+  inject: (profile: string, escalate: boolean) =>
+    post<{ match_id: string; profile: string; alerts: Alert[]; escalated: boolean }>(
+      `/api/redteam/inject?profile=${profile}&escalate=${escalate}`),
 };

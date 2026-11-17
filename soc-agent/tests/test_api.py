@@ -110,3 +110,28 @@ def test_notify_test_endpoint_sends_top_case(notified):
 
 def test_notify_test_without_channels_is_400(client):
     assert client.post("/api/notify/test").status_code == 400
+
+
+def test_inject_adds_a_flagged_cheater_of_the_profile(client):
+    before = len(client.get("/api/matches").json())
+    body = client.post("/api/redteam/inject?profile=esp").json()
+    assert body["profile"] == "esp"
+    assert body["alerts"], "the injected cheater should be flagged"
+    assert any(a["category"] == "esp" for a in body["alerts"])
+    # it really joined the board, and its replay/case are reachable
+    assert len(client.get("/api/matches").json()) == before + 1
+    mid, cn = body["match_id"], body["alerts"][0]["cn"]
+    assert client.get(f"/api/matches/{mid}/replay").status_code == 200
+    assert client.get(f"/api/matches/{mid}/cases/{cn}").status_code == 200
+
+
+def test_inject_with_escalate_pushes_to_discord(notified):
+    client, calls = notified
+    body = client.post("/api/redteam/inject?profile=aimbot&escalate=true").json()
+    assert body["escalated"] is True
+    assert len(calls) >= 1  # a Discord embed was posted for the injected cheater
+
+
+def test_inject_rejects_unknown_and_legit_profiles(client):
+    assert client.post("/api/redteam/inject?profile=speedhack").status_code == 400
+    assert client.post("/api/redteam/inject?profile=legit").status_code == 400

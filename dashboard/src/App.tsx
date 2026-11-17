@@ -5,6 +5,7 @@ import { AlertsTable } from "./components/AlertsTable";
 import { CasePanel } from "./components/CasePanel";
 import { BanWavePanel } from "./components/BanWavePanel";
 import { ReplayViewer } from "./components/ReplayViewer";
+import { RedTeamPanel } from "./components/RedTeamPanel";
 
 export function App() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -50,6 +51,14 @@ export function App() {
     }
   }, []);
 
+  const inject = useCallback(async (profile: string, escalate: boolean) => {
+    const res = await api.inject(profile, escalate);
+    const all = await refresh();
+    // jump straight to the freshly injected cheater so its case + replay show
+    const fresh = all.find((a) => a.match_id === res.match_id);
+    if (fresh) await select(fresh);
+  }, [refresh, select]);
+
   const queueBan = useCallback(async () => {
     if (!selected) return;
     const snap = await api.queueBan(selected.match_id, selected.cn);
@@ -78,6 +87,7 @@ export function App() {
 
       <div className="grid">
         <aside className="col-alerts">
+          <RedTeamPanel onInject={inject} />
           <AlertsTable
             alerts={alerts}
             selected={selected ? { match_id: selected.match_id, cn: selected.cn } : null}

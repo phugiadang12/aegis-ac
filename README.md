@@ -142,6 +142,11 @@ npm run dev            # http://localhost:5173
 - **Delayed ban waves** — queue confirmed cheaters and release them together, so
   cheat authors can't correlate a ban to the match that exposed them. The kick
   is a pluggable executor (logs now, ready to wire to the AssaultCube server).
+- **Live red-team demo** — an "Inject cheater" control spins up a fresh match with
+  a synthetic cheater of the chosen profile on demand (`POST /api/redteam/inject?profile=aimbot`),
+  so a new alert appears on screen and (with auto-escalate) pings Discord. It
+  streams the cheat's telemetry *signature* — never a real hack — so it's safe to
+  run live in front of anyone and needs no game attached.
 
 ## Alerts to Discord
 
