@@ -76,7 +76,10 @@ Write-up with evidence: [LAB.md](LAB.md).
 - [x] Fight-window turn stats; lock-on, reaction-time and silent-aim features
 - [x] Cheat-type assessment + "skill or cheat?" check + review checklist in SOC cases
 - [x] Real-match pentest protocol ([PENTEST.md](PENTEST.md))
+- [x] Telemetry mutation tool ([MUTATION.md](MUTATION.md)): silent aim floor 25° → 15°
 - [ ] Tune thresholds on real human games (protocol rounds R1–R2)
+- [ ] Combine evidence across matches (player history), so short rounds still add up
+- [ ] Lock-on rule that can't be diluted (count very tight shots, not the median)
 - [ ] Real headshots, join-on-connect, server-side honeypot, line-of-sight checks
 - [ ] Test grid (strength × FOV × ESP) → "how subtle before we miss it" chart
 - [ ] Real matches through dashboard → AI SOC → ban wave → Discord

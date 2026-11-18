@@ -41,8 +41,12 @@ HONEYPOT_ANGLE_DEG = 6.0
 ON_TARGET_DEG = 4.0
 # Lock-on precision is only measured on shots with an enemy this close to the crosshair.
 LOCK_WINDOW_DEG = 20.0
-# Real shots leave up to ~7 deg (yaw) / ~14 deg (pitch, recoil) from the view in our
-# lab data. A hit whose shot left further away than this was not aimed with the view.
+# Real shots leave the view by up to 6.9 deg sideways (yaw) and 14.4 deg vertically
+# (recoil kicks upward) across 53 real lab shots. A hit is "off-view" when its shot
+# left more than SILENT_YAW_DEG sideways (~2x the real max) or more than
+# SILENT_OFFSET_DEG in total. The separate yaw limit came from the mutation sweep:
+# with only the 25 deg total limit, silent aim at 15-20 deg went unnoticed.
+SILENT_YAW_DEG = 12.0
 SILENT_OFFSET_DEG = 25.0
 # A damage event this soon after a shot belongs to that shot.
 HIT_LINK_MS = 80.0
@@ -244,9 +248,6 @@ def extract_features(events: list[dict[str, Any]]) -> dict[int, PlayerFeatures]:
             r.hits += 1
             if ev.get("headshot"):
                 r.headshots += 1
-            shot = last_shot.get(ev["attacker"])
-            if shot and ev["ts"] - shot[0] <= HIT_LINK_MS and shot[1] > SILENT_OFFSET_DEG:
-                r.off_view_hits += 1
         elif t == "kill":
             row(ev["attacker"]).kills += 1
             row(ev["victim"]).deaths += 1
@@ -270,7 +271,43 @@ def extract_features(events: list[dict[str, Any]]) -> dict[int, PlayerFeatures]:
         r.shot_offset_median = _median(r._shot_offsets)
 
     _score_honeypot(events, honeypot, positions, feats)
+    _score_off_view(events, conv, feats)
     return feats
+
+
+def _score_off_view(events, conv, feats) -> None:
+    """Count hits whose shot left far from where the player was looking (silent
+    aim). The shot is compared with the view on BOTH sides of it (the tick before
+    and the tick after), because a player turning while firing has moved up to
+    ~12 deg between two ticks. Only a shot far from both views counts."""
+    ticks: dict[int, list[tuple[float, float, float]]] = defaultdict(list)
+    for ev in events:
+        if ev["type"] == "tick":
+            ticks[ev["cn"]].append((ev["ts"], ev["yaw"], ev.get("pitch", 0.0)))
+    stamps = {cn: [t[0] for t in lst] for cn, lst in ticks.items()}
+
+    def off_view(shot) -> bool:
+        cn = shot["cn"]
+        if cn not in ticks:
+            return False
+        sy, sp = aim_angles(shot["origin"], shot["target"], conv)
+        i = bisect.bisect_right(stamps[cn], shot["ts"])
+        views = [ticks[cn][j] for j in (i - 1, i) if 0 <= j < len(ticks[cn])
+                 and abs(ticks[cn][j][0] - shot["ts"]) <= 1000 * MAX_TICK_GAP_S]
+        if not views:
+            return False
+        return all(abs(_wrap180(sy - y)) > SILENT_YAW_DEG
+                   or angle_between(sy, sp, y, p) > SILENT_OFFSET_DEG
+                   for _, y, p in views)
+
+    last_shot: dict[int, tuple[float, bool]] = {}
+    for ev in events:
+        if ev["type"] == "shot":
+            last_shot[ev["cn"]] = (ev["ts"], off_view(ev))
+        elif ev["type"] == "damage":
+            shot = last_shot.get(ev["attacker"])
+            if shot and ev["ts"] - shot[0] <= HIT_LINK_MS and shot[1]:
+                feats[ev["attacker"]].off_view_hits += 1
 
 
 def _score_honeypot(events, honeypot, positions, feats) -> None:

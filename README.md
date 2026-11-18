@@ -2,7 +2,7 @@
 
 **A server-side anti-cheat for a multiplayer FPS, with an AI SOC analyst.**
 
-![tests](https://img.shields.io/badge/tests-91%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-98%20passing-brightgreen)
 ![python](https://img.shields.io/badge/python-3.12-blue)
 ![frontend](https://img.shields.io/badge/dashboard-TypeScript%20%2B%20React-3178c6)
 ![model](https://img.shields.io/badge/AI-Claude%20(Anthropic%20SDK)-8a63d2)
@@ -65,7 +65,7 @@ anti-cheat on your own LAN server.
 ```powershell
 python -m venv .venv ; .\.venv\Scripts\Activate.ps1
 pip install -e collector -e detection -e soc-agent
-pytest                                                   # 91 tests
+pytest                                                   # 98 tests
 
 python -m aegis_detection.evaluate --matches 20          # detector score vs ground truth
 python -m aegis_soc --profile esp                        # AI analyst investigates a match
@@ -158,6 +158,13 @@ still gets caught by the honeypot: a hidden target only a wallhack can see.
   `skill_or_cheat` → **monitor and review**, not ban. Calibrating that with real human
   rounds is the next step in [the pentest protocol](docs/PENTEST.md).
 
+**Testing for cheats I don't have:** a [telemetry mutation tool](docs/MUTATION.md) takes a
+real recorded match and adds only the footprint a silent aim, triggerbot or smooth aimbot
+would leave. The first sweep showed silent aim got through below 25°; after a fix based on
+the real data, it's caught from **15°**. It also showed where the detector is still weak:
+a triggerbot needs more engagements than one short round has, and one cheat signal can
+hide another.
+
 To me, finding problems like these is the point of testing on a real game instead of
 only on my own simulator.
 
@@ -173,7 +180,7 @@ only on my own simulator.
 | `dashboard/` | TypeScript + React UI: alerts, case reports, 2D replay, ban waves |
 | `integrations/assaultcube/` | **Blue team.** Telemetry patch for the real AssaultCube server |
 | `redteam/assaultcube-client/` | **Red team, optional.** LAN-only lab cheat client |
-| `docs/` | [Live lab report](docs/LAB.md), [pentest protocol](docs/PENTEST.md), [two-machine LAN demo](docs/LAN-DEMO.md), [roadmap](docs/ROADMAP.md) |
+| `docs/` | [Live lab report](docs/LAB.md), [pentest protocol](docs/PENTEST.md), [mutation testing](docs/MUTATION.md), [two-machine LAN demo](docs/LAN-DEMO.md), [roadmap](docs/ROADMAP.md) |
 
 ## Safety and ethics
 
