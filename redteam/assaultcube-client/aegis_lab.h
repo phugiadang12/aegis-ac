@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Peter D. Original Aegis AC code (not AssaultCube code).
 // Aegis AC — LAB cheat client (red-team side of the Aegis anti-cheat lab).
 //
 // Compiled in ONLY when AEGIS_LAB is defined (see redteam/assaultcube-client/setup.ps1).

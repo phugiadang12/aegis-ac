@@ -1,3 +1,11 @@
+Aegis AC: telemetry hooks for the dedicated server for AssaultCube 1.3.0.2 (commit 13f0d8e).
+
+This patch modifies AssaultCube source code. It is a derived work of AssaultCube /
+the Cube engine and is distributed under THEIR licence (zlib-like, with the Cube
+clause that the source may not be relicensed), NOT under Aegis AC's MIT licence.
+See https://assault.cubers.net/docs/license.html and THIRD_PARTY_NOTICES.md.
+Every changed line is marked "// Aegis AC". Applied with: git apply <this file>
+
 diff --git a/source/src/server.cpp b/source/src/server.cpp
 index 4f59d7e..cb2c263 100644
 --- a/source/src/server.cpp

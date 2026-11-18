@@ -1,6 +1,6 @@
 # Aegis AC
 
-**A server-side anti-cheat for a multiplayer FPS, with an AI SOC analyst.**
+**A server-side anti-cheat with an AI SOC analyst, tested on a real game.**
 
 ![tests](https://img.shields.io/badge/tests-98%20passing-brightgreen)
 ![python](https://img.shields.io/badge/python-3.12-blue)
@@ -8,165 +8,148 @@
 ![model](https://img.shields.io/badge/AI-Claude%20(Anthropic%20SDK)-8a63d2)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-Aegis AC watches what a game server already knows (where each player stands, where they
-aim, what they shoot) and looks for behaviour a human can't produce. Each suspicious
-player is checked by an AI analyst, which writes a case report. A human then decides,
-and bans go out in delayed waves.
+Aegis AC runs next to a real **AssaultCube** server (an open-source FPS). The server
+streams what it already knows (where each player stands, where they aim, what they
+shoot), and Aegis looks for behaviour a human can't produce. Each suspect goes to an
+**AI SOC analyst**, which names the likely cheat, checks whether skill could explain it,
+and writes a case report. A human makes the final decision.
 
-It runs in two modes:
-- **Simulated matches.** No game needed. This is good for learning and for demos.
-- **A real game.** Two people play on an AssaultCube server on your own computer, with
-  an optional lab cheat client so there is a real cheater to catch.
-
-![Aegis AC dashboard](docs/images/dashboard.jpg)
+I tested it on real matches on my own LAN, against a lab cheat client I control. The
+results, including what it missed, are below.
 
 ---
 
 ## How it works
 
 ```
-  game server ──telemetry──▶ collector ──▶ detector ──alerts──▶ AI SOC analyst ──▶ dashboard
-  (positions, aim, shots)    (validate,    (explainable          (investigates,      (human approves,
-                              store)        rules + honeypot)     writes a case)      ban wave, Discord)
+  AssaultCube server ──telemetry──▶ collector ──▶ detector ──▶ AI SOC analyst ──▶ human reviewer
+  (patched: positions,              (validate,    (features +    (likely cheat type,  (approve, ban wave,
+   aim, shots, hits)                 store)        rules)         skill check, case)   Discord)
 ```
 
-1. **Collect.** The game server sends one small JSON event per action over UDP. The
-   collector checks each event against a strict schema and stores it in SQLite.
-2. **Detect.** Every player in a match becomes a row of features (how fast they turn,
-   how often they hit, whether they aim at a hidden "honeypot" target). Simple rules
-   turn those features into a verdict, and every flag comes with a plain-English reason.
-3. **Investigate.** An AI analyst (Claude, through the Anthropic SDK) looks at each flagged
-   player with read-only tools, compares them to the clean players in the same match,
-   and files a case report. Without an API key, a built-in rule-based analyst does the
-   same job.
-4. **Act.** The dashboard shows the alerts, the case reports and a 2D replay. A human
-   approves, confirmed cheaters go into a delayed ban wave, and Discord gets a message.
-
-| 2D replay: the suspect's aim (red) vs. other players | AI SOC case report |
-|---|---|
-| ![replay](docs/images/replay-viewer.jpg) | ![case report](docs/images/case-report.jpg) |
+1. **Collect.** An 11-line patch makes the game server send one JSON event per action
+   over UDP. The collector validates each event against a strict schema and stores it.
+2. **Detect.** Each player becomes a row of measurements: turn speed, accuracy, how close
+   the crosshair sits to the enemy when firing, reaction time, whether shots leave where
+   the player is looking. Explainable rules turn those into flags with plain-English reasons.
+3. **Investigate (SOC).** The analyst (Claude, with read-only tools) answers three
+   questions per suspect:
+   - **What cheat does this look like?** A ranked list of types, with the evidence for each.
+   - **Could a skilled human do this?** `cheat_like` means something no human can do;
+     `skill_or_cheat` means strong but humanly possible, which never leads to a ban by
+     itself.
+   - **What should a person check?** A review checklist for the replay.
+4. **Act.** A human approves. Confirmed cheaters go into a delayed ban wave, so cheat
+   makers can't tell which match exposed them.
 
 ---
 
-## Choose how you want to use it
+## Results on the real game
 
-| I want to… | Go to | Needs |
-|---|---|---|
-| See the whole pipeline without a game | [A. Simulated demo](#a-simulated-demo-no-game) | Python, Node |
-| Run the anti-cheat / SOC on my own local game | [B. SOC on a real local game](#b-soc-on-a-real-local-game) | + VS 2022 Build Tools |
-| Attack my own anti-cheat with a real cheat (LAN only) | [C. Red team (optional)](#c-red-team-optional) | + VS 2022 Build Tools |
-
-**B and C are independent.** You can run the SOC without ever building the cheat. The
-cheat client is a separate folder, so you can also use it to test a different
-anti-cheat on your own LAN server.
-
-### A. Simulated demo (no game)
-
-```powershell
-python -m venv .venv ; .\.venv\Scripts\Activate.ps1
-pip install -e collector -e detection -e soc-agent
-pytest                                                   # 98 tests
-
-python -m aegis_detection.evaluate --matches 20          # detector score vs ground truth
-python -m aegis_soc --profile esp                        # AI analyst investigates a match
-
-uvicorn aegis_soc.api:create_app --factory --port 8008   # terminal 1: analysis API
-cd dashboard ; npm install ; npm run dev                 # terminal 2: http://localhost:5173
-```
-
-In the dashboard, **Inject cheater** creates a simulated cheater on demand, and you can
-watch it get flagged, investigated and sent to Discord. To turn on the AI analyst
-and Discord alerts, copy `.env.example` to `.env` and fill in `ANTHROPIC_API_KEY` and
-`DISCORD_WEBHOOK_URL`. Both are optional.
-
-### B. SOC on a real local game
-
-You need AssaultCube 1.3.0.2 (free) to play, and Visual Studio 2022 Build Tools to
-build the patched server. Full details: [integrations/assaultcube](integrations/assaultcube).
-
-```powershell
-.\integrations\assaultcube\setup.ps1     # clone AssaultCube source, add the telemetry patch, build the server
-
-# terminal 1: collector (listens for game telemetry on UDP 28800)
-$env:AEGIS_DB = "data/lab.db"; uvicorn aegis_collector.app:create_app --factory --port 8000
-
-# terminal 2: the patched game server (LAN only)
-cd assaultcube ; .\bin_win32\ac_server_aegis.exe
-```
-
-Open AssaultCube, type `/connect localhost` in the console, and play. A second machine on
-the same network can join too: see [docs/LAN-DEMO.md](docs/LAN-DEMO.md). Then scan the
-matches:
-
-```powershell
-python -m aegis_detection.scan --db data/lab.db
-```
-
-```
-ac-1794961039-2  (28879 events)
-  clean   Cheater          suspicion 0.55  [skill_or_cheat]  likely: aimbot
-           shots 23  hits 5  kills 1  peak turn 625 deg/s  lock 1.4 deg (10)  reaction 0 ms (0)  off-view hits 0
-           ! crosshair was a median 1.4 deg from the enemy across 10 shots (provisional rule: no human baseline yet)
-  clean   XP               suspicion 0.00  [low_data]  likely: -
-```
-
-Each player gets a **skill check** (`cheat_like`, `skill_or_cheat`, `clean`, `low_data`), the
-**likely cheat type**, and (without `--brief`) a checklist of what to verify in the replay.
-For full case reports from the SOC agent, run `python -m aegis_soc --db data/lab.db --watch`.
-To test whether it catches cheaters rather than just good players, follow the
-[pentest protocol](docs/PENTEST.md).
-
-### C. Red team (optional)
-
-A modified AssaultCube client with a wallhack (ESP) and an aimbot, plus an in-game menu
-(**Insert**). **It refuses to connect to anything except your own computer or LAN.**
-Full details: [redteam/assaultcube-client](redteam/assaultcube-client).
-
-```powershell
-.\redteam\assaultcube-client\setup.ps1
-```
-
----
-
-## Results
-
-**On simulated matches:** 100% of 160 cheaters caught, with 1 false positive among 480
-legit players. A wallhacker that aims like a human slips past every aim rule, but it
-still gets caught by the honeypot: a hidden target only a wallhack can see.
-
-**On a real game:** this is where it got interesting. Full write-up:
-[docs/LAB.md](docs/LAB.md).
+Full lab report: [docs/LAB.md](docs/LAB.md).
 
 ![turn rate in a real match](docs/images/lab/real-match-turn-rate.svg)
 
-- **A:** during a real aimbot fight (23 shots, 5 hits, 1 kill) the cheater's turn speed
-  stayed under the 900 °/s rule, so it was **not caught**. That limit was tuned on
-  simulated data. On a real 30 Hz server, a smoothed aimbot looks slower.
-- **B:** the player was flagged later, but the 932 °/s "snap" was a **respawn** (the
-  position jumped and the view reset), not aiming. That is the right player for the
-  wrong reason, and a human could trigger it too.
+**First run: the detector got it wrong both ways.**
+- **A:** during a real aimbot fight (23 shots, 5 hits, 1 kill), turn speed stayed under the
+  900 °/s rule, so the aimbot was **not caught**.
+- **B:** the player was flagged later, but the 932 °/s "snap" was a **respawn**, not aim.
+  It was the right player for the wrong reason, and an honest player could trigger it.
 
-**What I changed after that:**
-- **Respawns are ignored.** A position jump of more than 8 units in one tick is a
-  teleport, not a turn (normal movement is under 1 unit per tick). The false flag is gone.
-- **New measurements from real telemetry:** how close the crosshair is to the enemy at
-  each shot (lock-on), time from crosshair-on-enemy to shot (triggerbot), and hits whose
-  shot left far from the view (silent aim).
-- **Skill or cheat?** The SOC agent now separates "impossible for a human" from "very
-  good, but possible". The real aimbot rounds show a 1.4° median lock. That is
-  suspicious, but I don't yet have real human numbers to compare, so the agent says
-  `skill_or_cheat` → **monitor and review**, not ban. Calibrating that with real human
-  rounds is the next step in [the pentest protocol](docs/PENTEST.md).
+**What I changed, based on the real data:**
 
-**Testing for cheats I don't have:** a [telemetry mutation tool](docs/MUTATION.md) takes a
-real recorded match and adds only the footprint a silent aim, triggerbot or smooth aimbot
-would leave. The first sweep showed silent aim got through below 25°; after a fix based on
-the real data, it's caught from **15°**. It also showed where the detector is still weak:
-a triggerbot needs more engagements than one short round has, and one cheat signal can
-hide another.
+| Problem | Fix | Result |
+|---|---|---|
+| Respawn read as a snap | Skip turns with a position jump > 8 units in one tick (normal movement < 1) | False flag gone; real peak is 625 °/s |
+| Turn speed alone misses a smooth aimbot | Measure crosshair-to-enemy distance at each shot | Real aimbot: median **1.4°** lock, labelled *likely aimbot* |
+| Can't tell skill from cheating | Skill check + review checklist in every case | Aimbot rounds go to **review**, not to a ban, until real human numbers exist |
+| Silent aim / triggerbot not testable | [Telemetry mutation](docs/MUTATION.md): add only a cheat's footprint to a real match | Silent aim caught from **15°** (was 25°) |
 
-To me, finding problems like these is the point of testing on a real game instead of
-only on my own simulator.
+**Still weak (and on the list):** a triggerbot needs more engagements than one short
+round has. The lock-on rule can be diluted by other shots. A wallhack that aims like a
+human is invisible without server-side line-of-sight checks.
+
+---
+
+## The SOC part
+
+What exists today, on real matches:
+
+```powershell
+python -m aegis_soc --db data/lab.db --match <match_id> --watch
+```
+
+```
+CASE: silent aim - Cheater                       (real match + silent-aim footprint at 20°)
+Likely types: silent_aim, aimbot      Confidence: 96%      Disposition: BAN
+Skill check:  At least one signal cannot be produced by skill: 5 hits landed with the
+              shot leaving far from where the player was looking.
+Review checklist:
+  [ ] Find the listed hits and check the screen: the crosshair should be clearly off the victim.
+  [ ] Compare the shot direction with the view angle for those shots.
+```
+
+`--watch` also opens cases for players under the flag threshold, such as a very good
+player or a careful cheat, so a human sees the borderline ones too.
+
+**Not done yet: the SOC workflow on real matches.** The dashboard, ban waves and Discord
+alerts work, but so far only with simulated matches:
+
+| 2D replay: the suspect's aim (red) vs. other players | Case report in the dashboard |
+|---|---|
+| ![replay](docs/images/simulated/replay-viewer.jpg) | ![case report](docs/images/simulated/case-report.jpg) |
+
+*(Screenshots from a simulated match.)* Next is real matches flowing live into the alert
+queue → AI case → human decision → ban wave → Discord. See the [roadmap](docs/ROADMAP.md).
+
+---
+
+## Run it on your own game
+
+You need Windows, Git, Python 3.12, AssaultCube 1.3.0.2 (free) and Visual Studio 2022 Build
+Tools. Details: [integrations/assaultcube](integrations/assaultcube).
+
+```powershell
+python -m venv .venv ; .\.venv\Scripts\Activate.ps1
+pip install -e collector -e detection -e "soc-agent[llm]"
+.\integrations\assaultcube\setup.ps1     # build the patched AssaultCube server
+
+# terminal 1: collector (game telemetry on UDP 28800)
+$env:AEGIS_DB = "data/lab.db"; uvicorn aegis_collector.app:create_app --factory --port 8000
+
+# terminal 2: patched server (LAN only)
+cd assaultcube ; .\bin_win32\ac_server_aegis.exe
+```
+
+Join with `/connect localhost` (or from a second PC: [LAN demo](docs/LAN-DEMO.md)). After
+playing:
+
+```powershell
+python -m aegis_detection.scan --db data/lab.db          # label, likely type, numbers per player
+python -m aegis_soc --db data/lab.db --watch             # SOC case reports
+```
+
+The Claude analyst runs when `ANTHROPIC_API_KEY` is set. Copy `.env.example` to `.env`;
+`DISCORD_WEBHOOK_URL` is optional. Without a key, a rule-based analyst writes the same
+kind of case.
+
+To test whether it catches cheaters and not just good players, follow the
+[pentest protocol](docs/PENTEST.md). To test cheats you don't have, use
+[telemetry mutation](docs/MUTATION.md).
+
+**Optional red team:** a LAN-only lab client with a wallhack and an aimbot, so there's a
+real cheater to catch: [redteam/assaultcube-client](redteam/assaultcube-client). You can run
+the SOC without ever building it.
+
+---
+
+## Simulator (development only)
+
+Before the game was patched, I built the pipeline against simulated matches. The simulator
+is still used for unit tests and for the dashboard demo (**Inject cheater**). On 160
+simulated cheaters it catches all of them, with 1 false positive in 480 legit players. Those
+are easy numbers on data I generated myself, so the real-game results above are the ones
+that count. Details: [docs/SIMULATOR.md](docs/SIMULATOR.md).
 
 ---
 
@@ -174,25 +157,23 @@ only on my own simulator.
 
 | Folder | What it is |
 |---|---|
-| `collector/` | Telemetry ingest (UDP + HTTP), strict schema, SQLite store, match simulators |
-| `detection/` | Features, explainable rules, honeypot, cheat-type / skill check, evaluation, `scan` command |
+| `integrations/assaultcube/` | Telemetry patch for the real AssaultCube server |
+| `collector/` | Telemetry ingest (UDP + HTTP), strict schema, SQLite store |
+| `detection/` | Measurements, rules, cheat-type / skill check, `scan`, telemetry `mutate` |
 | `soc-agent/` | AI SOC analyst, alert queue, ban waves, Discord notifier, dashboard API |
 | `dashboard/` | TypeScript + React UI: alerts, case reports, 2D replay, ban waves |
-| `integrations/assaultcube/` | **Blue team.** Telemetry patch for the real AssaultCube server |
-| `redteam/assaultcube-client/` | **Red team, optional.** LAN-only lab cheat client |
-| `docs/` | [Live lab report](docs/LAB.md), [pentest protocol](docs/PENTEST.md), [mutation testing](docs/MUTATION.md), [two-machine LAN demo](docs/LAN-DEMO.md), [roadmap](docs/ROADMAP.md) |
+| `redteam/assaultcube-client/` | Optional, LAN-only lab cheat client |
+| `data/` | Your local databases (git-ignored) |
+| `docs/` | [Lab report](docs/LAB.md) · [Pentest protocol](docs/PENTEST.md) · [Mutation testing](docs/MUTATION.md) · [LAN demo](docs/LAN-DEMO.md) · [Simulator](docs/SIMULATOR.md) · [Roadmap](docs/ROADMAP.md) |
 
 ## Safety and ethics
 
 This is a defensive project. The red-team client exists only so that the anti-cheat has a
-real opponent in a lab:
-- it is a source change to an **open-source** game;
-- it **refuses to connect to non-LAN servers** (this is in code, not just a promise);
-- it always shows an `AEGIS LAB BUILD` watermark;
-- it is only built when you opt in.
-
-There is no memory reading, no injection, no driver and no bypassing of any commercial
-anti-cheat. It is never used on public servers or against real players.
+real opponent in a lab. It's a source change to an **open-source** game, it **refuses to
+connect to non-LAN servers** (in code), it always shows an `AEGIS LAB BUILD` watermark, and
+it's only built when you opt in. There's no memory reading, injection, driver or bypassing
+of any commercial anti-cheat. Silent aim and triggerbots are tested through telemetry
+mutation, not by building them.
 
 ## Tech stack
 
@@ -206,8 +187,11 @@ looking for my first role in **game security / anti-cheat or SOC**. I built Aegi
 how these systems fit together end to end: collecting telemetry, detecting cheats with
 rules I can explain, using an AI agent to help with investigations, and testing all of it
 against a real game. The most useful lessons came from the parts that didn't work the
-first time, and I've written those up honestly in [docs/LAB.md](docs/LAB.md).
+first time, and I've written those up in [docs/LAB.md](docs/LAB.md).
 
 ## License
 
-[MIT](LICENSE) © Peter D
+Aegis AC's own code is [MIT](LICENSE) © Peter D. The two `.patch` files modify AssaultCube
+source code, so they stay under **AssaultCube's licence**. AssaultCube itself isn't included;
+the setup scripts download it. Details: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+For responsible use and reporting issues, see [SECURITY.md](SECURITY.md).

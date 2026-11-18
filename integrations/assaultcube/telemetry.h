@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Peter D. Original Aegis AC code (not AssaultCube code).
 // Aegis AC — telemetry hook for the AssaultCube dedicated server.
 //
 // Streams one JSON event per UDP datagram to the Aegis collector

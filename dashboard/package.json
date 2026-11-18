@@ -1,6 +1,7 @@
 {
   "name": "aegis-dashboard",
   "private": true,
+  "license": "MIT",
   "version": "0.1.0",
   "type": "module",
   "description": "Live anti-cheat SOC dashboard: alerts, 2D replay viewer, ban waves",

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,8 @@ name = "aegis-detection"
 version = "0.1.0"
 description = "Behavioural cheat detection for Aegis AC"
 requires-python = ">=3.12"
+license = "MIT"
+authors = [{name = "Peter D"}]
 dependencies = ["aegis-collector"]
 
 [project.optional-dependencies]
