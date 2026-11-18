@@ -5,21 +5,22 @@ Each phase ends with something you can demo.
 ## Phase 0 — Setup
 - [x] Install Python 3.12, Git, Node.js LTS
 - [x] Install Visual Studio 2022 Build Tools (C++ workload)
-- [ ] Download AssaultCube, run a local game + local server
-- [ ] `git init`, push to GitHub
+- [x] Download AssaultCube, run a local game + local server
+- [x] `git init`, push to GitHub
 
 ## Phase 1 — Telemetry pipeline
 - [x] Define telemetry event schema (position, aim, shots, hits, kills)
 - [x] Collector service that ingests events and stores sessions
 - [x] Simulator that generates fake legit players (test without the game)
 - [x] Fix UDP packet loss under burst load (27% → 0% with 8 MB receive buffer)
-- [ ] Patch AssaultCube server to stream real events to the collector
+- [x] Patch AssaultCube server to stream real events to the collector ([integrations/assaultcube](../integrations/assaultcube))
 - **Demo:** live event feed from a real match
 
 ## Phase 2 — Red team (synthetic cheater telemetry)
-We do NOT build a real cheat. We generate the telemetry *signatures* a cheat
-would leave, labelled with ground truth, to train and score the detector.
-No memory reading, no injection, no evading commercial/kernel anti-cheat.
+The main red team generates the telemetry *signatures* a cheat would leave,
+labelled with ground truth, to train and score the detector. (The real-game lab in
+Phase 6 adds a LAN-only lab cheat client.) No memory reading, no injection, no
+evading commercial/kernel anti-cheat.
 - [x] Aimbot signature (instant snap, near-perfect accuracy)
 - [x] Humanised aimbot (snap smoothed over 3-5 ticks + jitter)
 - [x] Triggerbot (inhuman per-shot accuracy)
@@ -61,3 +62,18 @@ No memory reading, no injection, no evading commercial/kernel anti-cheat.
       interface ready for Zalo / Slack / Grafana
 - [ ] Record the 2-minute end-to-end demo video for the README
 - **Demo:** `uvicorn aegis_soc.api:create_app --factory --port 8008` + `npm run dev`
+
+## Phase 6 — Live lab (real game, real cheat)
+Write-up with evidence: [LAB.md](LAB.md).
+- [x] Patched AssaultCube server streams real telemetry (0 rejected events)
+- [x] Lab cheat client: ESP + aimbot + Insert menu, LAN-only lock, watermark
+      ([redteam/assaultcube-client](../redteam/assaultcube-client))
+- [x] One-command setup per track; `python -m aegis_detection.scan` for real matches
+- [x] First real aimbot fight: **not caught** (625 °/s peak < 900 rule)
+- [x] Found a false-positive risk: a respawn read as a 932 °/s snap
+- [x] Fixed: map change froze telemetry; client's local server leaked events
+- [ ] Ignore turns across respawn/teleport; tune thresholds on real human games
+- [ ] Fight-window turn stats + "snap then stop" feature
+- [ ] Real headshots, join-on-connect, server-side honeypot, line-of-sight checks
+- [ ] Test grid (strength × FOV × ESP) → "how subtle before we miss it" chart
+- [ ] Real matches through dashboard → AI SOC → ban wave → Discord

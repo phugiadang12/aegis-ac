@@ -1,0 +1,64 @@
+diff --git a/source/src/server.cpp b/source/src/server.cpp
+index 4f59d7e..cb2c263 100644
+--- a/source/src/server.cpp
++++ b/source/src/server.cpp
+@@ -11,6 +11,7 @@ VARP(serverdebug, 0, 0, 1);
+ #endif
+ 
+ #include "server.h"
++#include "telemetry.h"   // Aegis AC: stream live telemetry to the collector
+ #include "servercontroller.h"
+ #include "serverfiles.h"
+ 
+@@ -1893,6 +1894,7 @@ void serverdamage(client *target, client *actor, int damage, int gun, bool gib,
+         actor->state.damage += damage;
+ 
+         sendf(-1, 1, "ri7", gib ? SV_GIBDAMAGE : SV_DAMAGE, target->clientnum, actor->clientnum, gun, damage, ts.armour, ts.health);
++        aegis::damage(actor->clientnum, target->clientnum, gun, damage, gib, sg->gamemillis);   // Aegis AC
+ 
+         if (!isteam(target->team, actor->team))
+         {
+@@ -1947,6 +1949,7 @@ void serverdamage(client *target, client *actor, int damage, int gun, bool gib,
+             mlog(ACLOG_INFO, "[%s] %s suicided", actor->hostname, actor->name);
+         }
+         sendf(-1, 1, "ri5", gib ? SV_GIBDIED : SV_DIED, target->clientnum, actor->clientnum, actor->state.frags, gun);
++        aegis::kill(actor->clientnum, target->clientnum, gun, gib, sg->gamemillis);   // Aegis AC
+         if((suic || tk) && (m_htf || m_ktf) && targethasflag >= 0)
+         {
+             actor->state.flagscore--;
+@@ -2805,6 +2808,7 @@ void disconnect_client(int n, int reason)
+ {
+     ASSERT(ismainthread());
+     if(!clients.inrange(n) || clients[n]->type!=ST_TCPIP) return;
++    aegis::leave(n, sg->gamemillis);   // Aegis AC
+     sdropflag(n);
+     client &c = *clients[n];
+     c.state.lastdisc = servmillis;
+@@ -3708,6 +3712,9 @@ void process(ENetPacket *packet, int sender, int chan)
+                     hit.hit.info = getint(p);
+                     loopk(3) hit.hit.dir[k] = getint(p)/DNF;
+                 }
++                aegis::shot(cl->clientnum, shot.shot.gun,                     // Aegis AC
++                            shot.shot.from[0], shot.shot.from[1], shot.shot.from[2],
++                            shot.shot.to[0], shot.shot.to[1], shot.shot.to[2], sg->gamemillis);
+                 break;
+             }
+ 
+@@ -3787,6 +3794,8 @@ void process(ENetPacket *packet, int sender, int chan)
+                     cl->state.lastclaction = sg->gamemillis;
+                 }
+                 if(((cl->f & 0x1f) / 9) == 2) cl->state.lastclaction = sg->gamemillis; // crouching
++                aegis::tick(cl->clientnum, cl->name, cl->state.o.x, cl->state.o.y, cl->state.o.z,   // Aegis AC
++                            (float)cl->yaw, (float)cl->pitch, cl->state.state==CS_ALIVE, sg->gamemillis);
+ 
+                 if(!cl->isonrightmap) break;
+                 if(cl->type==ST_TCPIP && (cl->state.state==CS_ALIVE || cl->state.state==CS_EDITING))
+@@ -3838,6 +3847,8 @@ void process(ENetPacket *packet, int sender, int chan)
+                 cl->state.o.x = xt / DMF;
+                 cl->state.o.y = yt / DMF;
+                 cl->state.o.z = zt / DMF;
++                aegis::tick(cl->clientnum, cl->name, cl->state.o.x, cl->state.o.y, cl->state.o.z,   // Aegis AC
++                            (float)cl->yaw, (float)cl->pitch, cl->state.state==CS_ALIVE, sg->gamemillis);
+                 if(cl->type==ST_TCPIP && (cl->state.state==CS_ALIVE || cl->state.state==CS_EDITING))
+                 {
+                     cl->position.setsize(0);

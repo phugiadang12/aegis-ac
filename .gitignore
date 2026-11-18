@@ -8,7 +8,7 @@ data/
 *.jsonl
 *.db
 # AssaultCube install / build output stays out of the repo
-assaultcube/
+/assaultcube/
 *.egg-info/
 build/
 *.egg

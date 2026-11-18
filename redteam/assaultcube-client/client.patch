@@ -1,0 +1,95 @@
+diff --git a/source/src/client.cpp b/source/src/client.cpp
+index 248d2b7..c75e38a 100644
+--- a/source/src/client.cpp
++++ b/source/src/client.cpp
+@@ -2,6 +2,7 @@
+ 
+ #include "cube.h"
+ #include "bot/bot.h"
++#include "aegis_lab.h" // Aegis AC lab build only
+ 
+ VAR(connected, 1, 0, 0);
+ 
+@@ -79,6 +80,15 @@ void connectserv_(const char *servername, int serverport = 0, const char *passwo
+             connectrole = CR_DEFAULT;
+             return;
+         }
++#ifdef AEGIS_LAB
++        if(!aegis_lab_addr_ok(address.host)) // Aegis AC lab build: LAN/loopback only
++        {
++            conoutf("\f3[aegis lab] refusing to connect to non-LAN server \f5%s\f3 - lab build is local only", servername);
++            clientpassword[0] = '\0';
++            connectrole = CR_DEFAULT;
++            return;
++        }
++#endif
+     }
+     else
+     {
+diff --git a/source/src/clientgame.cpp b/source/src/clientgame.cpp
+index 686e30d..2806918 100644
+--- a/source/src/clientgame.cpp
++++ b/source/src/clientgame.cpp
+@@ -2,6 +2,7 @@
+ 
+ #include "cube.h"
+ #include "bot/bot.h"
++#include "aegis_lab.h" // Aegis AC lab build only
+ 
+ int nextmode = 0;   // nextmode becomes gamemode after next map load
+ VAR(gamemode, 1, 0, 0);
+@@ -682,6 +683,9 @@ void updateworld(int curtime, int lastmillis)        // main game update loop
+     syncentchanges();
+     physicsframe();
+     checkweaponstate();
++#ifdef AEGIS_LAB
++    aegis_aim_update(); // Aegis AC lab aimbot
++#endif
+     if(getclientnum()>=0) shoot(player1, worldpos);     // only shoot when connected to server
+     movebounceents();
+     moveotherplayers();
+diff --git a/source/src/console.cpp b/source/src/console.cpp
+index 96636e6..a9615f9 100644
+--- a/source/src/console.cpp
++++ b/source/src/console.cpp
+@@ -1,6 +1,7 @@
+ // console.cpp: the console buffer, its display, and command line control
+ 
+ #include "cube.h"
++#include "aegis_lab.h" // Aegis AC lab build only
+ 
+ #define CONSPAD (FONTH/3)
+ 
+@@ -595,6 +596,9 @@ void processtextinput(const char *text)
+ 
+ void keypress(int keycode, int scancode, bool isdown, SDL_Keymod mod)
+ {
++#ifdef AEGIS_LAB
++    if(!saycommandon && aegis_lab_key(keycode, isdown)) return; // Aegis AC lab menu
++#endif
+     keym *haskey = keyms.access(keycode);
+     if(!haskey && !(keycode & SDLK_SCANCODE_MASK) && scancode) haskey = keyms.access(scancode | SDLK_SCANCODE_MASK); // keycode not found: maybe we know the scancode
+     if(!haskey && isdown) haskey = autokeymap(keycode, scancode);
+diff --git a/source/src/renderhud.cpp b/source/src/renderhud.cpp
+index 018bd26..b34a8e3 100644
+--- a/source/src/renderhud.cpp
++++ b/source/src/renderhud.cpp
+@@ -1,6 +1,8 @@
+ // renderhud.cpp: HUD rendering
+ 
+ #include "cube.h"
++#define AEGIS_LAB_HUD
++#include "aegis_lab.h" // Aegis AC lab build only
+ 
+ void drawicon(Texture *tex, float x, float y, float s, int col, int row, float ts)
+ {
+@@ -817,6 +819,9 @@ void gl_drawhud(int w, int h, int curfps, int nquads, int curvert, bool underwat
+     if(damageindicatorplayer == p || (is_spect && getclient(player1->followplayercn) == damageindicatorplayer)) drawdmgindicator(p);
+ 
+     if(p->state==CS_ALIVE && !hidehudequipment) drawequipicons(p);
++#ifdef AEGIS_LAB
++    if(!editmode) aegis_draw_esp(p); // Aegis AC lab build only
++#endif
+ 
+     if(!editmode)
+     {
