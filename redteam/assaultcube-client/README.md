@@ -36,7 +36,13 @@ If the first-run account screen appears, press **Esc**.
 
 Press **Insert** to open or close the menu. **Up/Down** selects a setting and
 **Left/Right** changes it. Every setting is also a console command, for example
-`/labaimstr 100`.
+`/labaimstr 100`, and `/labmenu` toggles the menu from the console (`/labmenu 7` opens it
+on row 8, which is handy for screenshots).
+
+The menu is a HUD-style console: numbered rows grouped into **VISUALS** and **AIM ASSIST**,
+segmented ON/OFF switches and bars, a live status line (aim profile: subtle / noticeable /
+blatant), and an info panel that explains the selected setting and shows its console
+command. Sub-options are greyed out while their master switch is off.
 
 | Setting | Console | What it does |
 |---|---|---|
