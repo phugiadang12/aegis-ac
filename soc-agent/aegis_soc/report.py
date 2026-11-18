@@ -17,9 +17,10 @@ Disposition = Literal["ban", "shadow", "monitor", "clear"]
 
 # The cheat taxonomy the analyst classifies into.
 TAXONOMY = {
-    "aimbot": "Automated aim - snaps onto targets faster than a human can flick.",
+    "aimbot": "Automated aim - pulls the crosshair onto enemies, as an instant snap or a smooth lock.",
     "humanised_aimbot": "Aim assist smoothed to look human, but still too accurate.",
     "triggerbot": "Auto-fires the instant the crosshair crosses an enemy.",
+    "silent_aim": "Bullets go to the enemy while the view points elsewhere.",
     "esp": "Wallhack / ESP - knows enemy positions through walls.",
     "aim_assistance": "Soft aim help; weak signal, usually monitor not ban.",
     "inconclusive": "Flagged, but the evidence does not clearly fit one category.",
@@ -48,21 +49,35 @@ class CaseReport(BaseModel):
                     "short bullet with numbers.")
     recommendation: str = Field(
         description="What the human reviewer should do next and why.")
+    likely_types: list[str] = Field(
+        default_factory=list,
+        description="Cheat types this could be, most likely first (taxonomy keys).")
+    skill_check: str = Field(
+        default="",
+        description="Could a very skilled human produce this? Name the signals "
+                    "that rule skill out, or say that none do.")
+    review_focus: list[str] = Field(
+        default_factory=list,
+        description="What the human reviewer should check by hand in the replay.")
 
     def render(self) -> str:
         """Human-readable case card for the terminal / dashboard."""
         bar = "=" * 68
         bullets = "\n".join(f"  - {e}" for e in self.evidence)
+        focus = "\n".join(f"  [ ] {x}" for x in self.review_focus)
         return (
             f"{bar}\n"
             f"CASE: {self.title}\n"
             f"{bar}\n"
             f"Player      : {self.name} (cn {self.cn})\n"
             f"Category    : {self.category}\n"
+            f"Likely types: {', '.join(self.likely_types) or '-'}\n"
             f"Confidence  : {self.confidence*100:.0f}%\n"
             f"Disposition : {self.disposition.upper()}\n"
             f"\n{self.summary}\n"
             f"\nEvidence:\n{bullets}\n"
+            f"\nSkill check:\n  {self.skill_check or '-'}\n"
+            f"\nReview checklist:\n{focus or '  -'}\n"
             f"\nRecommendation:\n  {self.recommendation}\n"
             f"{bar}"
         )

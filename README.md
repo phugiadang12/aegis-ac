@@ -2,7 +2,7 @@
 
 **A server-side anti-cheat for a multiplayer FPS, with an AI SOC analyst.**
 
-![tests](https://img.shields.io/badge/tests-83%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-91%20passing-brightgreen)
 ![python](https://img.shields.io/badge/python-3.12-blue)
 ![frontend](https://img.shields.io/badge/dashboard-TypeScript%20%2B%20React-3178c6)
 ![model](https://img.shields.io/badge/AI-Claude%20(Anthropic%20SDK)-8a63d2)
@@ -65,7 +65,7 @@ anti-cheat on your own LAN server.
 ```powershell
 python -m venv .venv ; .\.venv\Scripts\Activate.ps1
 pip install -e collector -e detection -e soc-agent
-pytest                                                   # 83 tests
+pytest                                                   # 91 tests
 
 python -m aegis_detection.evaluate --matches 20          # detector score vs ground truth
 python -m aegis_soc --profile esp                        # AI analyst investigates a match
@@ -104,10 +104,17 @@ python -m aegis_detection.scan --db data/lab.db
 
 ```
 ac-1794961039-2  (28879 events)
-  FLAGGED Cheater          suspicion 0.96  shots  23  hits   5  kills  1  peak turn    932 deg/s
-           - view snapped at 932 deg/s (human flicks stay well under 900)
-  clean   XP               suspicion 0.00  shots   0  hits   0  kills  0  peak turn    263 deg/s
+  clean   Cheater          suspicion 0.55  [skill_or_cheat]  likely: aimbot
+           shots 23  hits 5  kills 1  peak turn 625 deg/s  lock 1.4 deg (10)  reaction 0 ms (0)  off-view hits 0
+           ! crosshair was a median 1.4 deg from the enemy across 10 shots (provisional rule: no human baseline yet)
+  clean   XP               suspicion 0.00  [low_data]  likely: -
 ```
+
+Each player gets a **skill check** (`cheat_like`, `skill_or_cheat`, `clean`, `low_data`), the
+**likely cheat type**, and (without `--brief`) a checklist of what to verify in the replay.
+For full case reports from the SOC agent, run `python -m aegis_soc --db data/lab.db --watch`.
+To test whether it catches cheaters rather than just good players, follow the
+[pentest protocol](docs/PENTEST.md).
 
 ### C. Red team (optional)
 
@@ -139,8 +146,20 @@ still gets caught by the honeypot: a hidden target only a wallhack can see.
   position jumped and the view reset), not aiming. That is the right player for the
   wrong reason, and a human could trigger it too.
 
-Both are on the fix list. To me, finding problems like these is the point of testing
-on a real game instead of only on my own simulator.
+**What I changed after that:**
+- **Respawns are ignored.** A position jump of more than 8 units in one tick is a
+  teleport, not a turn (normal movement is under 1 unit per tick). The false flag is gone.
+- **New measurements from real telemetry:** how close the crosshair is to the enemy at
+  each shot (lock-on), time from crosshair-on-enemy to shot (triggerbot), and hits whose
+  shot left far from the view (silent aim).
+- **Skill or cheat?** The SOC agent now separates "impossible for a human" from "very
+  good, but possible". The real aimbot rounds show a 1.4° median lock. That is
+  suspicious, but I don't yet have real human numbers to compare, so the agent says
+  `skill_or_cheat` → **monitor and review**, not ban. Calibrating that with real human
+  rounds is the next step in [the pentest protocol](docs/PENTEST.md).
+
+To me, finding problems like these is the point of testing on a real game instead of
+only on my own simulator.
 
 ---
 
@@ -149,12 +168,12 @@ on a real game instead of only on my own simulator.
 | Folder | What it is |
 |---|---|
 | `collector/` | Telemetry ingest (UDP + HTTP), strict schema, SQLite store, match simulators |
-| `detection/` | Features, explainable rules, honeypot logic, evaluation, `scan` command |
+| `detection/` | Features, explainable rules, honeypot, cheat-type / skill check, evaluation, `scan` command |
 | `soc-agent/` | AI SOC analyst, alert queue, ban waves, Discord notifier, dashboard API |
 | `dashboard/` | TypeScript + React UI: alerts, case reports, 2D replay, ban waves |
 | `integrations/assaultcube/` | **Blue team.** Telemetry patch for the real AssaultCube server |
 | `redteam/assaultcube-client/` | **Red team, optional.** LAN-only lab cheat client |
-| `docs/` | [Live lab report](docs/LAB.md), [two-machine LAN demo](docs/LAN-DEMO.md), [roadmap](docs/ROADMAP.md) |
+| `docs/` | [Live lab report](docs/LAB.md), [pentest protocol](docs/PENTEST.md), [two-machine LAN demo](docs/LAN-DEMO.md), [roadmap](docs/ROADMAP.md) |
 
 ## Safety and ethics
 

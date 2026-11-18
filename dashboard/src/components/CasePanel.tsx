@@ -30,6 +30,33 @@ export function CasePanel({ report, loading, queued, onQueue }: Props) {
         {report.evidence.map((e, i) => <li key={i}>{e}</li>)}
       </ul>
 
+      {report.likely_types && report.likely_types.length > 0 && (
+        <>
+          <h3>Likely cheat type</h3>
+          <div className="types">
+            {report.likely_types.map((t, i) => (
+              <span key={t} className={i === 0 ? "type top" : "type"}>{t.replace(/_/g, " ")}</span>
+            ))}
+          </div>
+        </>
+      )}
+
+      {report.skill_check && (
+        <>
+          <h3>Skill or cheat?</h3>
+          <p className="skill">{report.skill_check}</p>
+        </>
+      )}
+
+      {report.review_focus && report.review_focus.length > 0 && (
+        <>
+          <h3>Check by hand</h3>
+          <ul className="focus">
+            {report.review_focus.map((x, i) => <li key={i}>{x}</li>)}
+          </ul>
+        </>
+      )}
+
       <h3>Recommendation</h3>
       <p className="reco">{report.recommendation}</p>
 

@@ -14,6 +14,7 @@ import json
 import sqlite3
 from collections import Counter
 
+from .classify import assess
 from .features import extract_features
 from .rules import judge_all
 
@@ -30,6 +31,8 @@ def load_matches(db_path: str, match_id: str | None = None) -> dict[str, list[di
         matches: dict[str, list[dict]] = {}
         for mid, payload in con.execute(sql + " ORDER BY id", args):
             matches.setdefault(mid, []).append(json.loads(payload))
+        for events in matches.values():
+            events.sort(key=lambda e: e.get("ts", 0))   # UDP can reorder; sort is stable
         return matches
     finally:
         con.close()
@@ -45,16 +48,15 @@ def scan(db_path: str, match_id: str | None = None) -> list[dict]:
             f = feats[v.cn]
             players.append({
                 **v.as_dict(),
-                "shots": f.shots, "hits": f.hits, "kills": f.kills, "deaths": f.deaths,
-                "max_turn_rate": round(f.max_turn_rate, 1),
-                "p95_turn_rate": round(f.p95_turn_rate, 1),
+                "features": f.as_dict(),
+                "assessment": assess(f, v).as_dict(),
             })
         results.append({"match_id": mid, "events": dict(Counter(e["type"] for e in events)),
                         "players": players})
     return results
 
 
-def _print(results: list[dict]) -> None:
+def _print(results: list[dict], detail: bool = True) -> None:
     if not results:
         print("no matches in this database yet")
         return
@@ -62,12 +64,24 @@ def _print(results: list[dict]) -> None:
         total = sum(m["events"].values())
         print(f"\n{m['match_id']}  ({total} events)")
         for p in m["players"]:
+            f, a = p["features"], p["assessment"]
             mark = "FLAGGED" if p["is_cheat"] else "clean  "
+            top = a["likely_types"][0]["type"] if a["likely_types"] else "-"
             print(f"  {mark} {p['name']:<16} suspicion {p['suspicion']:.2f}  "
-                  f"shots {p['shots']:>3}  hits {p['hits']:>3}  kills {p['kills']:>2}  "
-                  f"peak turn {p['max_turn_rate']:>6.0f} deg/s")
+                  f"[{a['label']}]  likely: {top}")
+            print(f"           shots {f['shots']}  hits {f['hits']}  kills {f['kills']}  "
+                  f"peak turn {f['max_turn_rate']:.0f} deg/s  "
+                  f"lock {f['lock_error_median']:.1f} deg ({f['lock_samples']})  "
+                  f"reaction {f['reaction_median_ms']:.0f} ms ({f['reaction_samples']})  "
+                  f"off-view hits {f['off_view_hits']}")
             for r in p["reasons"]:
-                print(f"           - {r}")
+                print(f"           ! {r}")
+            if detail and a["label"] in ("cheat_like", "skill_or_cheat"):
+                print(f"           > {a['explanation']}")
+                for h in a["human_signals"]:
+                    print(f"           + {h}")
+                for x in a["review_focus"]:
+                    print(f"           ? review: {x}")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -75,9 +89,10 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--db", default="data/aegis.db", help="SQLite file the collector writes")
     ap.add_argument("--match", help="only this match_id")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
+    ap.add_argument("--brief", action="store_true", help="hide the review guidance")
     args = ap.parse_args(argv)
     results = scan(args.db, args.match)
-    print(json.dumps(results, indent=2)) if args.json else _print(results)
+    print(json.dumps(results, indent=2)) if args.json else _print(results, not args.brief)
 
 
 if __name__ == "__main__":

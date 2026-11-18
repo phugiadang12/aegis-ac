@@ -42,10 +42,17 @@ How to work:
 1. Pull the suspect's overview to see the detector's rule hits.
 2. Compare them to the clean cohort with the baseline tool - a z-score far \
 above the lobby's normal players is strong evidence; a value merely high is not.
-3. Gather the specific evidence for the suspected cheat: turn_timeline for \
-aimbot snaps, honeypot for ESP/wallhack (shots at the phantom entity that no \
-legitimate client can see are near-conclusive).
-4. Weigh it and file one case report.
+3. Pull cheat_profile: it ranks likely cheat types and says whether anything \
+seen is impossible for a human ("cheat_like") or only unusually strong \
+("skill_or_cheat").
+4. Gather the specific evidence for the suspected cheat: turn_timeline for \
+aimbot snaps, aim_precision for lock-on / triggerbot reaction / silent-aim hits, \
+honeypot for ESP/wallhack (shots at the phantom entity that no legitimate client \
+can see are near-conclusive).
+5. Weigh it and file one case report. Fill likely_types, a skill_check that \
+names what rules skill out (or says nothing does), and a review_focus checklist \
+for the human. Never recommend ban or shadow on "skill_or_cheat" evidence alone: \
+very good players exist, so that is "monitor" plus a replay review.
 
 Dispositions: "ban" (near-certain), "shadow" (confident - queue for a delayed \
 ban wave so cheat authors can't correlate detection), "monitor" (suspicious but \
@@ -80,11 +87,14 @@ class HeuristicAnalyst:
         base = inv.baseline(cn)
         hp = inv.honeypot(cn)
         turns = inv.turn_timeline(cn)
+        profile = inv.cheat_profile(cn)
 
         verdict = ctx.verdicts[cn]
         category = verdict.category or "inconclusive"
         confidence = verdict.suspicion
         disposition = _disposition(category, confidence)
+        if profile["label"] == "skill_or_cheat":
+            disposition = "monitor"          # soft evidence: never ban, never clear blindly
 
         evidence: list[str] = [h["reason"] for h in ov["detector"]["rule_hits"]]
         if "comparisons" in base:
@@ -113,12 +123,19 @@ class HeuristicAnalyst:
                 f"peak view snap of {fastest['deg_per_s']} deg/s at t={fastest['ts']}ms")
 
         summary, recommendation = _narrative(category, confidence, disposition, ov)
+        human = profile["human_signals"]
+        skill_check = profile["explanation"]
+        if profile["label"] == "skill_or_cheat" and human:
+            skill_check += " Human-looking signals: " + "; ".join(human) + "."
         return CaseReport(
             cn=cn, name=ov["name"], category=category,
             confidence=round(confidence, 2), disposition=disposition,
             title=f"{category.replace('_', ' ')} - {ov['name']}",
             summary=summary, evidence=evidence or ["detector flag with no detail"],
             recommendation=recommendation,
+            likely_types=[t["type"] for t in profile["likely_types"]],
+            skill_check=skill_check,
+            review_focus=profile["review_focus"],
         )
 
 
@@ -178,6 +195,10 @@ class LLMAnalyst:
              {"cn": {"type": "integer"}}),
             ("honeypot", "Shots the player aimed at the hidden phantom entity.",
              {"cn": {"type": "integer"}}),
+            ("aim_precision", "Lock-on error, reaction time and silent-aim hits, with sample sizes.",
+             {"cn": {"type": "integer"}}),
+            ("cheat_profile", "Ranked likely cheat types, skill check and review checklist.",
+             {"cn": {"type": "integer"}}),
         ]
         tools = []
         for name, desc, props in defs:
@@ -194,6 +215,8 @@ class LLMAnalyst:
             "baseline": lambda cn: inv.baseline(cn),
             "turn_timeline": lambda cn: inv.turn_timeline(cn),
             "honeypot": lambda cn: inv.honeypot(cn),
+            "aim_precision": lambda cn: inv.aim_precision(cn),
+            "cheat_profile": lambda cn: inv.cheat_profile(cn),
         }
         return tools, dispatch
 

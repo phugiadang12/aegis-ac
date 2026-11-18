@@ -30,6 +30,9 @@ export interface CaseReport {
   summary: string;
   evidence: string[];
   recommendation: string;
+  likely_types?: string[];
+  skill_check?: string;
+  review_focus?: string[];
 }
 
 export interface ReplayPlayer {

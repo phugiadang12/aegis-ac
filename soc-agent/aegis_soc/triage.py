@@ -32,10 +32,13 @@ class AlertQueue:
     def __init__(self) -> None:
         self._alerts: list[Alert] = []
 
-    def ingest(self, ctx: MatchContext) -> int:
+    def ingest(self, ctx: MatchContext, include_watch: bool = False) -> int:
+        """Queue flagged players. With ``include_watch`` also queue players who
+        tripped a rule but stayed under the flag threshold (the "watch" tier),
+        so a reviewer sees borderline cases such as a very good player."""
         added = 0
         for v in ctx.verdicts.values():
-            if v.is_cheat:
+            if v.is_cheat or (include_watch and v.hits):
                 self._alerts.append(Alert(v.suspicion, v.cn, v.name, v.category))
                 added += 1
         self._alerts.sort(reverse=True)
@@ -52,10 +55,11 @@ def triage_match(
     events: list[dict[str, Any]],
     analyst: Analyst | None = None,
     match_id: str = "match",
+    include_watch: bool = False,
 ) -> list[CaseReport]:
     """Run the full pipeline on one match: detect -> queue -> investigate."""
     analyst = analyst or HeuristicAnalyst()
     ctx = MatchContext.from_events(events, match_id=match_id)
     queue = AlertQueue()
-    queue.ingest(ctx)
+    queue.ingest(ctx, include_watch=include_watch)
     return [analyst.investigate(ctx, alert.cn) for alert in queue]

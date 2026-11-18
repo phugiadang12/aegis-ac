@@ -70,13 +70,20 @@ The chart shows how fast each player turned their view, measured every server ti
 ## 6. Next steps
 
 **Fix the detector (on real data):**
-- [ ] Ignore turn rate across respawns and teleports (position jump in one tick)
+- [x] Ignore turn rate across respawns and teleports (position jump > 8 units in one tick).
+      On this match the peak drops from 932 to 625 °/s, so the false flag is gone.
+- [x] Measure turn speed only in the second before shots (`fight_p95_turn_rate`)
+- [x] Lock-on, reaction-time and silent-aim measurements from real telemetry. On the real
+      aimbot rounds the crosshair sat a median **1.4°** and **2.2°** from the enemy at each
+      shot. Shot direction vs view: within ~1–3° of yaw on every real shot, so the
+      measurement is precise enough to use.
+- [x] SOC agent: likely cheat type + "skill or cheat?" check + review checklist
 - [ ] Record clean human games on real maps and tune the thresholds from them
-- [ ] Measure turn speed only around fights, and add a "snap then stop" feature
+      ([pentest protocol](PENTEST.md), rounds R1–R2)
 - [ ] Record real headshots, and send "join" when a player connects
 - [ ] Honeypot target sent by the real server, and line-of-sight checks for wallhacks
 
-**Then SOC + testing:**
+**Then SOC + testing:** (see [PENTEST.md](PENTEST.md))
 - [ ] A test grid: aimbot strength (100 / 35 / 15) × FOV (180 / 30 / 10) × wallhack on/off,
       each round labelled → a chart of "how subtle can the cheat be before Aegis misses it?"
 - [ ] Send real matches through the dashboard, AI analyst, ban wave and Discord

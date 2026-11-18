@@ -29,6 +29,18 @@ HIT_RATE_HIGH = 0.65      # strong, suspicious when paired with fast turning
 HEADSHOT_SUSPICIOUS = 0.50
 MIN_HONEYPOT_SHOTS = 3    # shots at the phantom entity -> ESP / wallhack
 
+# Silent aim: hits whose shot left far from where the player was looking.
+MIN_OFF_VIEW_HITS = 2
+# Triggerbot: the first shot comes within one server tick of the crosshair
+# reaching an enemy, most of the time. Human reaction is ~150-250 ms.
+MIN_REACTIONS = 8          # with 5, 3 lucky fast shots were enough for a false flag
+INSTANT_REACTION_SHARE = 0.60
+# Lock-on: median distance (deg) between crosshair and enemy at the moment of
+# each shot. PROVISIONAL: real aimbot rounds measured 1.4 and 2.2 deg; we have no
+# real human baseline yet, so this rule alone stays below the flag threshold.
+MIN_LOCK_SAMPLES = 8
+LOCK_TIGHT_DEG = 2.5
+
 CHEAT_THRESHOLD = 0.60    # overall suspicion at/above this -> flagged
 
 
@@ -87,6 +99,29 @@ def _rules(f: PlayerFeatures) -> list[Hit]:
             "honeypot", "esp", 0.95,
             f"aimed at the phantom entity {f.honeypot_shots} times — "
             f"only a wallhack can see it",
+        ))
+
+    if f.off_view_hits >= MIN_OFF_VIEW_HITS:
+        hits.append(Hit(
+            "off_view_hits", "silent_aim", 0.93,
+            f"{f.off_view_hits} hits landed with the shot leaving far from where "
+            f"the player was looking (normal spread is a few degrees)",
+        ))
+
+    if (f.reaction_samples >= MIN_REACTIONS
+            and f.instant_reaction_rate >= INSTANT_REACTION_SHARE):
+        hits.append(Hit(
+            "instant_reaction", "triggerbot", 0.85,
+            f"fired within one tick of the crosshair reaching an enemy in "
+            f"{f.instant_reaction_rate*100:.0f}% of {f.reaction_samples} engagements "
+            f"(median {f.reaction_median_ms:.0f} ms; humans need ~150-250 ms)",
+        ))
+
+    if f.lock_samples >= MIN_LOCK_SAMPLES and f.lock_error_median <= LOCK_TIGHT_DEG:
+        hits.append(Hit(
+            "tight_lock", "aimbot", 0.55,
+            f"crosshair was a median {f.lock_error_median:.1f} deg from the enemy "
+            f"across {f.lock_samples} shots (provisional rule: no human baseline yet)",
         ))
 
     if f.hits >= MIN_HITS and f.headshot_rate >= HEADSHOT_SUSPICIOUS:

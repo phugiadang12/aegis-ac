@@ -72,8 +72,11 @@ Write-up with evidence: [LAB.md](LAB.md).
 - [x] First real aimbot fight: **not caught** (625 °/s peak < 900 rule)
 - [x] Found a false-positive risk: a respawn read as a 932 °/s snap
 - [x] Fixed: map change froze telemetry; client's local server leaked events
-- [ ] Ignore turns across respawn/teleport; tune thresholds on real human games
-- [ ] Fight-window turn stats + "snap then stop" feature
+- [x] Ignore turns across respawn/teleport (false flag removed on the real match)
+- [x] Fight-window turn stats; lock-on, reaction-time and silent-aim features
+- [x] Cheat-type assessment + "skill or cheat?" check + review checklist in SOC cases
+- [x] Real-match pentest protocol ([PENTEST.md](PENTEST.md))
+- [ ] Tune thresholds on real human games (protocol rounds R1–R2)
 - [ ] Real headshots, join-on-connect, server-side honeypot, line-of-sight checks
 - [ ] Test grid (strength × FOV × ESP) → "how subtle before we miss it" chart
 - [ ] Real matches through dashboard → AI SOC → ban wave → Discord

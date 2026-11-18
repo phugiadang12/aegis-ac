@@ -16,7 +16,8 @@ import statistics
 from dataclasses import dataclass
 from typing import Any
 
-from aegis_detection.features import PlayerFeatures, extract_features
+from aegis_detection.classify import assess
+from aegis_detection.features import TELEPORT_UNITS, PlayerFeatures, extract_features
 from aegis_detection.rules import Verdict, judge_all
 
 # Metrics the baseline tool compares a suspect against the clean cohort on.
@@ -27,6 +28,8 @@ _BASELINE_METRICS = [
     ("max_turn_rate", "peak turn rate (deg/s)", True),
     ("p95_turn_rate", "sustained turn rate (deg/s)", True),
     ("honeypot_shots", "shots at phantom entity", True),
+    ("off_view_hits", "hits that left far from the view", True),
+    ("instant_reaction_rate", "share of one-tick reactions", True),
 ]
 
 
@@ -144,18 +147,55 @@ class Investigation:
         timestamp. Aimbot snaps show up here as single-tick turns an order of
         magnitude faster than a human flick."""
         ticks = sorted(
-            ((e["ts"], e["yaw"]) for e in self.ctx.events
+            ((e["ts"], e["yaw"], e["pos"]) for e in self.ctx.events
              if e["type"] == "tick" and e["cn"] == cn),
             key=lambda p: p[0],
         )
         spikes = []
-        for (t0, y0), (t1, y1) in zip(ticks, ticks[1:]):
+        for (t0, y0, p0), (t1, y1, p1) in zip(ticks, ticks[1:]):
             dt = (t1 - t0) / 1000.0
+            jump = math.dist((p0["x"], p0["y"], p0.get("z", 0.0)),
+                             (p1["x"], p1["y"], p1.get("z", 0.0)))
+            if jump > TELEPORT_UNITS:
+                continue                      # respawn / teleport, not a turn
             if 0 < dt <= 0.1:
                 spikes.append({"ts": round(t1, 1),
                                "deg_per_s": round(abs(_wrap180(y1 - y0)) / dt, 1)})
         spikes.sort(key=lambda s: s["deg_per_s"], reverse=True)
         return {"cn": cn, "sampled_ticks": len(ticks), "sharpest_turns": spikes[:top]}
+
+    # --- tool: aim precision ---------------------------------------------
+    def aim_precision(self, cn: int) -> dict[str, Any]:
+        """How the player's crosshair relates to enemies and to their own shots:
+        lock-on error at each shot (aimbot), reaction time from crosshair-on-enemy
+        to first shot (triggerbot), and hits whose shot left far from the view
+        (silent aim). Each number comes with its sample size - small samples are
+        weak evidence."""
+        f = self.ctx.features.get(cn)
+        if f is None:
+            return {"error": f"no player with cn={cn} in this match"}
+        return {
+            "cn": cn,
+            "lock_error_median_deg": round(f.lock_error_median, 2),
+            "lock_samples": f.lock_samples,
+            "reaction_median_ms": round(f.reaction_median_ms, 1),
+            "reaction_samples": f.reaction_samples,
+            "instant_reaction_rate": round(f.instant_reaction_rate, 3),
+            "shot_offset_median_deg": round(f.shot_offset_median, 2),
+            "off_view_hits": f.off_view_hits,
+            "respawn_teleports_ignored": f.teleports,
+        }
+
+    # --- tool: cheat profile ---------------------------------------------
+    def cheat_profile(self, cn: int) -> dict[str, Any]:
+        """The detector's cheat-type assessment: likely cheat types with their
+        evidence, a skill check (cheat_like = something no human can do;
+        skill_or_cheat = strong but humanly possible; clean; low_data), the
+        signals that look human, and what a reviewer should check by hand."""
+        f = self.ctx.features.get(cn)
+        if f is None:
+            return {"error": f"no player with cn={cn} in this match"}
+        return assess(f, self.ctx.verdicts[cn]).as_dict()
 
     # --- tool: honeypot ---------------------------------------------------
     def honeypot(self, cn: int, limit: int = 8) -> dict[str, Any]:
