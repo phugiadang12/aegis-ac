@@ -94,7 +94,8 @@ $env:AEGIS_DB = "data/lab.db"; uvicorn aegis_collector.app:create_app --factory 
 cd assaultcube ; .\bin_win32\ac_server_aegis.exe
 ```
 
-Open AssaultCube, type `/connect localhost` in the console, and play. Then scan the
+Open AssaultCube, type `/connect localhost` in the console, and play. A second machine on
+the same network can join too: see [docs/LAN-DEMO.md](docs/LAN-DEMO.md). Then scan the
 matches:
 
 ```powershell
@@ -153,7 +154,7 @@ on a real game instead of only on my own simulator.
 | `dashboard/` | TypeScript + React UI: alerts, case reports, 2D replay, ban waves |
 | `integrations/assaultcube/` | **Blue team.** Telemetry patch for the real AssaultCube server |
 | `redteam/assaultcube-client/` | **Red team, optional.** LAN-only lab cheat client |
-| `docs/` | [Live lab report](docs/LAB.md), [roadmap](docs/ROADMAP.md) |
+| `docs/` | [Live lab report](docs/LAB.md), [two-machine LAN demo](docs/LAN-DEMO.md), [roadmap](docs/ROADMAP.md) |
 
 ## Safety and ethics
 
